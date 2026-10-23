@@ -29,7 +29,6 @@ CentFlow/
 ├── .gitignore
 ├── LICENSE
 └── README.md
-```
 
 ## 4. Directory Responsibilities
 
