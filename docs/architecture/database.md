@@ -62,7 +62,7 @@ backend/
 ## 4. Connection & Session Management
 
 ### 4.1 Configuration
-Database settings are managed in [`backend/app/core/config.py`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/core/config.py):
+Database settings are managed in [`backend/app/core/config.py`](../../backend/app/core/config.py):
 - `DATABASE_URL`: Defaults to `sqlite:///./centflow.db` (resolved to absolute path in `backend/`).
 - Staging/production environments override this via `.env` or environment variables:
   ```bash
@@ -70,7 +70,7 @@ Database settings are managed in [`backend/app/core/config.py`](file:///c:/Users
   ```
 
 ### 4.2 FastAPI Session Dependency
-FastAPI route handlers and service factories inject database sessions via `get_db` from [`backend/app/database/session.py`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/database/session.py):
+FastAPI route handlers and service factories inject database sessions via `get_db` from [`backend/app/database/session.py`](../../backend/app/database/session.py):
 
 ```python
 from fastapi import Depends
@@ -123,7 +123,7 @@ alembic downgrade -1
 
 ## 7. Repository Pattern (`BaseRepository[T]`)
 
-The generic [`BaseRepository`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/repositories/base.py) provides standard persistence operations:
+The generic [`BaseRepository`](../../backend/app/repositories/base.py) provides standard persistence operations:
 - `get_by_id(id: str) -> Optional[ModelType]`
 - `list(offset: int = 0, limit: int = 20) -> Sequence[ModelType]`
 - `count() -> int`

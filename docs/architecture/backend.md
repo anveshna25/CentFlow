@@ -68,7 +68,7 @@ backend/
 ## 3. Layer Responsibilities
 
 ### 3.1 `app/core/` (Configuration & Foundation)
-- Manages typed application configuration via [`Settings`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/core/config.py#L22-L30) and [`get_settings()`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/core/config.py#L33-L49).
+- Manages typed application configuration via [`Settings`](../../backend/app/core/config.py) and [`get_settings()`](../../backend/app/core/config.py).
 - Loads environment variables from `.env` in local development without imposing heavy third-party dependencies.
 - Configures application environment (`development`, `production`, `testing`), host, port, API prefixes, and debug flags.
 
@@ -79,7 +79,7 @@ backend/
 - Exposes versioned endpoints (e.g., `/api/v1/...`) alongside top-level probes (`/health`).
 
 ### 3.3 `app/domain/` (Domain Layer)
-- Encapsulates pure CentFlow financial concepts ([`Asset`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/domain/models.py#L7-L14), [`Instrument`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/domain/models.py#L34-L44), [`Exchange`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/domain/models.py#L16-L23), [`Market`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/domain/models.py#L25-L32), [`Price`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/domain/models.py#L46-L54), [`Watchlist`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/domain/models.py#L56-L63), [`Portfolio`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/domain/models.py#L65-L72), [`Position`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/domain/models.py#L74-L81)).
+- Encapsulates pure CentFlow financial concepts ([`Asset`](../../backend/app/domain/models.py), [`Instrument`](../../backend/app/domain/models.py), [`Exchange`](../../backend/app/domain/models.py), [`Market`](../../backend/app/domain/models.py), [`Price`](../../backend/app/domain/models.py), [`Watchlist`](../../backend/app/domain/models.py), [`Portfolio`](../../backend/app/domain/models.py), [`Position`](../../backend/app/domain/models.py)).
 - Domain classes have zero dependency on database drivers, ORM frameworks, or HTTP transport libraries.
 
 ### 3.4 `app/services/` (Service Layer)
@@ -98,7 +98,7 @@ backend/
 
 ## 4. Application Factory Pattern
 
-The application is initialized via the `create_app()` factory function in [`backend/app/main.py`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/app/main.py):
+The application is initialized via the `create_app()` factory function in [`backend/app/main.py`](../../backend/app/main.py):
 
 ```python
 from fastapi import FastAPI
@@ -123,7 +123,7 @@ def create_app() -> FastAPI:
     return app
 ```
 
-The outer entrypoint [`backend/main.py`](file:///c:/Users/WINNTUSIT/Desktop/CentFlow/backend/main.py) instantiates the application instance for Uvicorn:
+The outer entrypoint [`backend/main.py`](../../backend/main.py) instantiates the application instance for Uvicorn:
 
 ```python
 from app.main import create_app
