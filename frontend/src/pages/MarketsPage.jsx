@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card } from '../components/common/Card'
 import { Badge } from '../components/common/Badge'
+import { LoadingSpinner } from '../components/common/LoadingSpinner'
+import { ErrorBanner } from '../components/common/ErrorBanner'
+import { searchInstruments, getQuote } from '../api/marketData'
 
-const ALL_INSTRUMENTS = [
+const DEFAULT_INSTRUMENTS = [
   { symbol: 'AAPL', name: 'Apple Inc.', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 185.50, change: '+0.87%', isUp: true, volume: '52.4M' },
   { symbol: 'MSFT', name: 'Microsoft Corporation', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 420.25, change: '+0.83%', isUp: true, volume: '21.3M' },
   { symbol: 'GOOGL', name: 'Alphabet Inc.', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 175.80, change: '+1.27%', isUp: true, volume: '18.2M' },
@@ -12,12 +15,123 @@ const ALL_INSTRUMENTS = [
 ]
 
 export function MarketsPage({ externalSearch = '' }) {
+  const [instruments, setInstruments] = useState(DEFAULT_INSTRUMENTS)
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [localSearch, setLocalSearch] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
 
   const activeSearch = externalSearch || localSearch
 
-  const filteredInstruments = ALL_INSTRUMENTS.filter((inst) => {
+  const loadInstruments = useCallback(async () => {
+    setError(null)
+    setIsLoading(true)
+    try {
+      const res = await searchInstruments()
+      if (res?.data && res.data.length > 0) {
+        const enriched = await Promise.all(
+          res.data.map(async (inst) => {
+            try {
+              const quoteRes = await getQuote(inst.symbol)
+              const q = quoteRes?.data
+              if (q) {
+                const isUp = typeof q.change === 'number' ? q.change >= 0 : !String(q.change || '').startsWith('-')
+                return {
+                  symbol: inst.symbol,
+                  name: inst.name,
+                  assetType: inst.asset_type || 'equity',
+                  exchange: inst.exchange || 'N/A',
+                  market: inst.market || 'Global',
+                  price: Number(q.price),
+                  change: `${q.change_percent >= 0 ? '+' : ''}${q.change_percent}%`,
+                  isUp,
+                  volume: q.volume ? `${(Number(q.volume) / 1000000).toFixed(1)}M` : 'N/A',
+                }
+              }
+            } catch {
+              // Fallback to default instrument if individual quote fails
+            }
+            return {
+              symbol: inst.symbol,
+              name: inst.name,
+              assetType: inst.asset_type || 'equity',
+              exchange: inst.exchange || 'N/A',
+              market: inst.market || 'Global',
+              price: 0,
+              change: '0.00%',
+              isUp: true,
+              volume: 'N/A',
+            }
+          })
+        )
+        setInstruments(enriched)
+      }
+    } catch (err) {
+      setError(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let isCancelled = false
+    const fetchData = async () => {
+      try {
+        const res = await searchInstruments()
+        if (!isCancelled && res?.data && res.data.length > 0) {
+          const enriched = await Promise.all(
+            res.data.map(async (inst) => {
+              try {
+                const quoteRes = await getQuote(inst.symbol)
+                const q = quoteRes?.data
+                if (q) {
+                  const isUp = typeof q.change === 'number' ? q.change >= 0 : !String(q.change || '').startsWith('-')
+                  return {
+                    symbol: inst.symbol,
+                    name: inst.name,
+                    assetType: inst.asset_type || 'equity',
+                    exchange: inst.exchange || 'N/A',
+                    market: inst.market || 'Global',
+                    price: Number(q.price),
+                    change: `${q.change_percent >= 0 ? '+' : ''}${q.change_percent}%`,
+                    isUp,
+                    volume: q.volume ? `${(Number(q.volume) / 1000000).toFixed(1)}M` : 'N/A',
+                  }
+                }
+              } catch {
+                // Ignore individual quote failure
+              }
+              return {
+                symbol: inst.symbol,
+                name: inst.name,
+                assetType: inst.asset_type || 'equity',
+                exchange: inst.exchange || 'N/A',
+                market: inst.market || 'Global',
+                price: 0,
+                change: '0.00%',
+                isUp: true,
+                volume: 'N/A',
+              }
+            })
+          )
+          if (!isCancelled) {
+            setInstruments(enriched)
+          }
+        }
+      } catch (err) {
+        if (!isCancelled) setError(err)
+      } finally {
+        if (!isCancelled) setIsLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => {
+      isCancelled = true
+    }
+  }, [])
+
+  const filteredInstruments = instruments.filter((inst) => {
     const matchesCategory =
       selectedCategory === 'all' || inst.assetType.toLowerCase() === selectedCategory.toLowerCase()
     const matchesSearch =
@@ -31,6 +145,15 @@ export function MarketsPage({ externalSearch = '' }) {
 
   return (
     <div id="cf-markets-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-6)' }}>
+      {/* Optional Error Alert */}
+      {error && (
+        <ErrorBanner
+          error={error}
+          onRetry={loadInstruments}
+          id="cf-markets-error-banner"
+        />
+      )}
+
       {/* Page Title & Controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--cf-space-4)' }}>
         <div>
@@ -64,6 +187,11 @@ export function MarketsPage({ externalSearch = '' }) {
           ))}
         </div>
       </div>
+
+      {/* Loading Indicator */}
+      {isLoading && (
+        <LoadingSpinner message="Retrieving instruments and quotes from backend..." id="cf-markets-spinner" />
+      )}
 
       {/* Main Table Card */}
       <Card

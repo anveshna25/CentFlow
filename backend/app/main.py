@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.api.routes import health
 from app.core.config import get_settings
@@ -14,6 +15,15 @@ def create_app() -> FastAPI:
         description="CentFlow Market Intelligence Platform API",
         version="0.1.0",
         debug=settings.debug,
+    )
+
+    # Configure CORS for SPA frontend clients
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.cors_origins),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # Register centralized exception handlers for standard error responses
