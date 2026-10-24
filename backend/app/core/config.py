@@ -28,6 +28,7 @@ class Settings:
     app_env: str
     app_host: str
     app_port: int
+    database_url: str
     api_v1_prefix: str = "/api/v1"
     debug: bool = False
 
@@ -41,12 +42,17 @@ def get_settings() -> Settings:
             _load_env_file(candidate_path)
             break
 
+    backend_dir = Path(__file__).resolve().parent.parent.parent
+    default_db_path = (backend_dir / "centflow.db").as_posix()
+    default_db_url = f"sqlite:///{default_db_path}"
+
     env = os.getenv("APP_ENV", "development").lower()
     return Settings(
         app_name=os.getenv("APP_NAME", "CentFlow"),
         app_env=env,
         app_host=os.getenv("APP_HOST", "127.0.0.1"),
         app_port=int(os.getenv("APP_PORT", "8000")),
+        database_url=os.getenv("DATABASE_URL", default_db_url),
         api_v1_prefix=os.getenv("API_V1_PREFIX", "/api/v1"),
         debug=(env == "development"),
     )
