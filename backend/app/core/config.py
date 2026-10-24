@@ -29,6 +29,7 @@ class Settings:
     app_host: str
     app_port: int
     database_url: str
+    market_data_provider: str = "mock"
     api_v1_prefix: str = "/api/v1"
     debug: bool = False
 
@@ -53,6 +54,7 @@ def get_settings() -> Settings:
         app_host=os.getenv("APP_HOST", "127.0.0.1"),
         app_port=int(os.getenv("APP_PORT", "8000")),
         database_url=os.getenv("DATABASE_URL", default_db_url),
+        market_data_provider=os.getenv("MARKET_DATA_PROVIDER", "mock").lower(),
         api_v1_prefix=os.getenv("API_V1_PREFIX", "/api/v1"),
         debug=(env == "development"),
     )

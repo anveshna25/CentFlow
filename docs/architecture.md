@@ -38,7 +38,7 @@ Contains the React-based client application, frontend components, assets, and fr
 
 ### `backend/`
 
-Contains server-side services, APIs, business logic, domain models, database persistence, and backend-specific configuration. For architectural details, see [Backend Architecture](architecture/backend.md) and [Database Architecture](architecture/database.md).
+Contains server-side services, APIs, business logic, domain models, database persistence, and backend-specific configuration. For architectural details, see [Backend Architecture](architecture/backend.md), [Database Architecture](architecture/database.md), and [Market Data Provider Architecture](architecture/market-data.md).
 
 ### `docs/`
 
