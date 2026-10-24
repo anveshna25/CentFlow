@@ -76,7 +76,17 @@ backend/requirements.txt
 
 Frontend dependencies are maintained through the frontend package configuration.
 
-## 8. Documentation
+## 8. Quality & Continuous Integration
+
+All changes are expected to meet established testing, linting, and build standards:
+
+- **Backend:** Unit test suite must pass across supported Python versions (`python -m unittest discover -s tests -v`).
+- **Frontend:** ESLint and production bundle build must pass (`npm run lint`, `npm run build`).
+- **CI Automation:** All PRs and main commits are automatically checked via GitHub Actions (`.github/workflows/ci.yml`).
+
+For detailed standards and pre-commit verification checklists, see [Development Quality Conventions](quality.md).
+
+## 9. Documentation
 
 Documentation should be updated when a change introduces or modifies:
 
@@ -88,7 +98,7 @@ Documentation should be updated when a change introduces or modifies:
 
 Documentation should remain concise and should avoid duplicating information that can be obtained directly from the source code.
 
-## 9. Development Principle
+## 10. Development Principle
 
 Prefer simple, understandable solutions over unnecessary complexity.
 
