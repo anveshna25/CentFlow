@@ -34,7 +34,7 @@ CentFlow/
 
 ### `frontend/`
 
-Contains the React-based client application, frontend components, assets, and frontend-specific configuration.
+Contains the React-based client application, frontend components, assets, and frontend-specific configuration. For architectural details, see [Frontend Architecture](architecture/frontend.md).
 
 ### `backend/`
 
