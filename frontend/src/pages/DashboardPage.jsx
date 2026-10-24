@@ -1,10 +1,14 @@
+import { useState, useEffect, useCallback } from 'react'
 import { StatWidget } from '../components/market/StatWidget'
 import { Card } from '../components/common/Card'
 import { Badge } from '../components/common/Badge'
+import { LoadingSpinner } from '../components/common/LoadingSpinner'
+import { ErrorBanner } from '../components/common/ErrorBanner'
 import { useNavigation } from '../state/NavigationContext'
 import { PAGES } from '../state/pages'
+import { getProviderStatus, getQuote } from '../api/marketData'
 
-const FEATURED_ASSETS = [
+const DEFAULT_BENCHMARKS = [
   { symbol: 'AAPL', name: 'Apple Inc.', type: 'equity', price: '$185.50', change: '+0.87%', isUp: true, exchange: 'NASDAQ' },
   { symbol: 'MSFT', name: 'Microsoft Corporation', type: 'equity', price: '$420.25', change: '+0.83%', isUp: true, exchange: 'NASDAQ' },
   { symbol: 'BTC-USD', name: 'Bitcoin USD', type: 'crypto', price: '$65,400.00', change: '+1.95%', isUp: true, exchange: 'Coinbase' },
@@ -14,9 +18,102 @@ const FEATURED_ASSETS = [
 
 export function DashboardPage() {
   const { navigate } = useNavigation()
+  const [providerStatus, setProviderStatus] = useState(null)
+  const [featuredAssets, setFeaturedAssets] = useState(DEFAULT_BENCHMARKS)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const loadDashboardData = useCallback(async () => {
+    setError(null)
+    setIsLoading(true)
+    try {
+      // Query provider status from live backend API
+      const statusRes = await getProviderStatus()
+      if (statusRes?.data) {
+        setProviderStatus(statusRes.data)
+      }
+
+      // Query live quotes for benchmarks from backend
+      const symbols = ['AAPL', 'MSFT', 'BTC-USD', 'SPY']
+      const quotePromises = symbols.map((sym) =>
+        getQuote(sym).catch(() => null)
+      )
+      const results = await Promise.all(quotePromises)
+
+      const updated = DEFAULT_BENCHMARKS.map((item) => {
+        const found = results.find((r) => r?.data?.symbol === item.symbol)
+        if (found?.data) {
+          const q = found.data
+          const isUp = typeof q.change === 'number' ? q.change >= 0 : !String(q.change || '').startsWith('-')
+          return {
+            ...item,
+            price: `$${Number(q.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            change: `${q.change_percent >= 0 ? '+' : ''}${q.change_percent}%`,
+            isUp,
+          }
+        }
+        return item
+      })
+      setFeaturedAssets(updated)
+    } catch (err) {
+      setError(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let isCancelled = false
+    const fetchData = async () => {
+      try {
+        const statusRes = await getProviderStatus()
+        if (!isCancelled && statusRes?.data) {
+          setProviderStatus(statusRes.data)
+        }
+
+        const symbols = ['AAPL', 'MSFT', 'BTC-USD', 'SPY']
+        const results = await Promise.all(symbols.map((s) => getQuote(s).catch(() => null)))
+        if (!isCancelled) {
+          const updated = DEFAULT_BENCHMARKS.map((item) => {
+            const found = results.find((r) => r?.data?.symbol === item.symbol)
+            if (found?.data) {
+              const q = found.data
+              const isUp = typeof q.change === 'number' ? q.change >= 0 : !String(q.change || '').startsWith('-')
+              return {
+                ...item,
+                price: `$${Number(q.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                change: `${q.change_percent >= 0 ? '+' : ''}${q.change_percent}%`,
+                isUp,
+              }
+            }
+            return item
+          })
+          setFeaturedAssets(updated)
+        }
+      } catch (err) {
+        if (!isCancelled) setError(err)
+      } finally {
+        if (!isCancelled) setIsLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   return (
     <div id="cf-dashboard-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-6)' }}>
+      {/* Optional Error Alert */}
+      {error && (
+        <ErrorBanner
+          error={error}
+          onRetry={loadDashboardData}
+          id="cf-dashboard-error-banner"
+        />
+      )}
+
       {/* Welcome Banner */}
       <section
         style={{
@@ -33,7 +130,9 @@ export function DashboardPage() {
         }}
       >
         <div>
-          <Badge variant="brand" size="sm" id="cf-dashboard-badge">Market Intelligence Overview</Badge>
+          <Badge variant="brand" size="sm" id="cf-dashboard-badge">
+            {providerStatus ? `Provider: ${providerStatus.name.toUpperCase()} (Online)` : 'Market Intelligence Overview'}
+          </Badge>
           <h1 style={{ fontSize: '28px', marginTop: 'var(--cf-space-2)', marginBottom: 'var(--cf-space-1)', letterSpacing: '-0.02em' }}>
             Markets Overview & Intelligence
           </h1>
@@ -62,6 +161,11 @@ export function DashboardPage() {
         </div>
       </section>
 
+      {/* Loading state indicator */}
+      {isLoading && (
+        <LoadingSpinner message="Synchronizing live quotes with backend..." id="cf-dash-spinner" />
+      )}
+
       {/* KPI Cards Grid */}
       <section
         style={{
@@ -73,30 +177,30 @@ export function DashboardPage() {
         <StatWidget
           id="stat-spy"
           title="S&P 500 Index (SPY)"
-          value="$510.15"
+          value={featuredAssets.find((a) => a.symbol === 'SPY')?.price || '$510.15'}
           changePercent={0.50}
           subtitle="Daily Volume: 65.0M"
         />
         <StatWidget
           id="stat-btc"
           title="Bitcoin (BTC-USD)"
-          value="$65,400.00"
+          value={featuredAssets.find((a) => a.symbol === 'BTC-USD')?.price || '$65,400.00'}
           changePercent={1.95}
           subtitle="24h High: $66,100.00"
         />
         <StatWidget
           id="stat-msft"
           title="Microsoft Corp (MSFT)"
-          value="$420.25"
+          value={featuredAssets.find((a) => a.symbol === 'MSFT')?.price || '$420.25'}
           changePercent={0.83}
           subtitle="All-Time Range Momentum"
         />
         <StatWidget
           id="stat-active-provider"
           title="Active Provider"
-          value="Mock Provider"
+          value={providerStatus ? providerStatus.name.toUpperCase() : 'MOCK'}
           changePercent={0.0}
-          subtitle="Status: Deterministic Simulator"
+          subtitle={providerStatus?.message || 'Status: Deterministic Simulator'}
         />
       </section>
 
@@ -133,7 +237,7 @@ export function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {FEATURED_ASSETS.map((asset) => (
+              {featuredAssets.map((asset) => (
                 <tr
                   key={asset.symbol}
                   id={`asset-row-${asset.symbol}`}

@@ -30,6 +30,7 @@ class Settings:
     app_port: int
     database_url: str
     market_data_provider: str = "mock"
+    cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
     api_v1_prefix: str = "/api/v1"
     debug: bool = False
 
@@ -48,6 +49,9 @@ def get_settings() -> Settings:
     default_db_url = f"sqlite:///{default_db_path}"
 
     env = os.getenv("APP_ENV", "development").lower()
+    cors_env = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+    cors_origins = tuple(origin.strip() for origin in cors_env.split(",") if origin.strip())
+
     return Settings(
         app_name=os.getenv("APP_NAME", "CentFlow"),
         app_env=env,
@@ -55,6 +59,7 @@ def get_settings() -> Settings:
         app_port=int(os.getenv("APP_PORT", "8000")),
         database_url=os.getenv("DATABASE_URL", default_db_url),
         market_data_provider=os.getenv("MARKET_DATA_PROVIDER", "mock").lower(),
+        cors_origins=cors_origins,
         api_v1_prefix=os.getenv("API_V1_PREFIX", "/api/v1"),
         debug=(env == "development"),
     )
