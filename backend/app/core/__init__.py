@@ -3,7 +3,10 @@ from app.core.errors import (
     BadRequestError,
     CentFlowException,
     ConflictError,
+    InstrumentNotFoundError,
     NotFoundError,
+    ProviderError,
+    ProviderUnavailableError,
     ValidationError,
 )
 
@@ -15,4 +18,7 @@ __all__ = [
     "ValidationError",
     "ConflictError",
     "BadRequestError",
+    "ProviderError",
+    "ProviderUnavailableError",
+    "InstrumentNotFoundError",
 ]

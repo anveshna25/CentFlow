@@ -70,6 +70,43 @@ class BadRequestError(CentFlowException):
         )
 
 
+class ProviderError(CentFlowException):
+    """Base exception for market data provider errors."""
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "PROVIDER_ERROR",
+        status_code: int = status.HTTP_502_BAD_GATEWAY,
+        details: Optional[list[dict[str, Any]]] = None,
+    ):
+        super().__init__(
+            message=message,
+            code=code,
+            status_code=status_code,
+            details=details,
+        )
+
+
+class ProviderUnavailableError(ProviderError):
+    """Raised when an external market data provider is unreachable or unhealthy."""
+
+    def __init__(self, provider_name: str, message: Optional[str] = None):
+        super().__init__(
+            message=message or f"Market data provider '{provider_name}' is currently unavailable.",
+            code="PROVIDER_UNAVAILABLE",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            details=[{"provider": provider_name}],
+        )
+
+
+class InstrumentNotFoundError(NotFoundError):
+    """Raised when a specific financial instrument/symbol is not found by a provider or database."""
+
+    def __init__(self, symbol: str):
+        super().__init__(resource="Instrument", identifier=symbol)
+
+
 def _build_error_response(code: str, message: str, details: Optional[list[Any]] = None) -> dict[str, Any]:
     """Helper to build uniform error envelope."""
     payload: dict[str, Any] = {
