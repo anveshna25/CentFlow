@@ -1,8 +1,15 @@
-from fastapi import FastAPI
+from app.main import create_app
 
-app = FastAPI()
+app = create_app()
 
+if __name__ == "__main__":
+    import uvicorn
+    from app.core.config import get_settings
 
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
+    settings = get_settings()
+    uvicorn.run(
+        "main:app",
+        host=settings.app_host,
+        port=settings.app_port,
+        reload=settings.debug,
+    )

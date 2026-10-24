@@ -4,7 +4,8 @@ frontend/dist/
 
 # Python
 backend/.venv/
-backend/__pycache__/
+**/__pycache__/
+*.py[cod]
 
 # Environment
 .env
