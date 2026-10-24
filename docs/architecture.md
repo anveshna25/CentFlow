@@ -38,7 +38,7 @@ Contains the React-based client application, frontend components, assets, and fr
 
 ### `backend/`
 
-Contains server-side services, APIs, business logic, and backend-specific configuration.
+Contains server-side services, APIs, business logic, domain models, and backend-specific configuration. For detailed layer separation and design principles, see [Backend Architecture](architecture/backend.md).
 
 ### `docs/`
 

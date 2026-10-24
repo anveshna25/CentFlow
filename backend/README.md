@@ -30,8 +30,13 @@ FastAPI's interactive API documentation is available at:
 /docs
 ```
 
-## Current Status
+## Architecture
 
-The backend currently contains only the initial FastAPI foundation.
+The backend follows a modular, layered architecture:
+- `app/core/`: Configuration, settings, and environment loading.
+- `app/api/`: Routing, request validation, and endpoint handlers.
+- `app/domain/`: Pure financial domain models and definitions.
+- `app/services/`: Application workflows and business logic.
+- `app/repositories/`: Persistence abstraction and data access interfaces.
 
-Application-specific APIs, business logic, database integration, and market-data services will be introduced in later phases.
+See [Backend Architecture](../docs/architecture/backend.md) for full architectural documentation.
