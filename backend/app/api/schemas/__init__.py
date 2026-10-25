@@ -30,6 +30,13 @@ from app.api.schemas.market_data import (
     SyncCatalogResponseSchema,
 )
 
+from app.api.schemas.portfolio import (
+    PortfolioCreateRequest,
+    PortfolioResponse,
+    PositionCreateRequest,
+    PositionResponse,
+)
+
 __all__ = [
     "BaseSchema",
     "ErrorDetail",
@@ -56,4 +63,8 @@ __all__ = [
     "BollingerBandsComponentSchema",
     "IndicatorSeriesResponseSchema",
     "MarketIntelligenceResponseSchema",
+    "PortfolioCreateRequest",
+    "PortfolioResponse",
+    "PositionCreateRequest",
+    "PositionResponse",
 ]

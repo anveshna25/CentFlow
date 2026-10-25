@@ -170,5 +170,7 @@ function NavigationTrigger() {
    - User-defined instrument groupings (Mega-Cap Tech, Decentralized L1s, Macro Hedges).
    - Tracked symbol chips and collective daily momentum.
 4. **Portfolios (`PortfoliosPage.jsx`):**
-   - Valuation metrics: Total Valuation, Unrealized P&L, Cash Reserves.
-   - Positions table: Instrument, Quantity, Average Entry Price, Current Price, Market Value, and P&L.
+   - **Real-Time Marked-to-Market Valuation:** Dynamic valuation KPIs (Total Value, Unrealized P&L $ and %, Invested Cost Basis, Active Positions count) calculated against live provider quotes.
+   - **Open Holdings Table:** Interactive table tracking each holding's asset category, quantity, average entry price, current market price, total market value, and unrealized return.
+   - **Position Lifecycle Management:** Seamless modal forms for adding/accumulating holdings (with auto-population when linked from asset inspection) and closing positions.
+   - **Multi-Portfolio Support:** Create and toggle across multiple dedicated portfolios (e.g. Retirement IRA, Speculative Tech, Core Multi-Asset).
