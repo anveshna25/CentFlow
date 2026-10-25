@@ -124,6 +124,14 @@ The [`AssetDetailModal`](../../frontend/src/components/market/AssetDetailModal.j
   - `Instrument Profile & Provenance`: Exchange settlement rules, data provider provenance (`MOCK` / `YAHOO`), and cache architecture.
 - **Accessibility & Interaction:** Closes on backdrop click or `Escape` key, and automatically syncs when opened via URL hash parameters.
 
+### 4.4 Quantitative Analytics Integration Components
+
+- **[`TechnicalPostureBadge`](../../frontend/src/components/analytics/TechnicalPostureBadge.jsx):** Normalized, accessible visual indicator mapping backend `TrendPosture`, `MomentumState`, and composite factor scores to standardized color tokens (`bullish`, `bearish`, `warning`, `brand`, `neutral`) with direction icons and optional score display.
+- **[`MarketRegimeDistribution`](../../frontend/src/components/analytics/MarketRegimeDistribution.jsx):** Multi-asset quantitative market consensus component rendering:
+  - Multi-segment trend posture distribution track (Bullish vs. Neutral vs. Bearish percentages).
+  - Consensus factor score meter (0–100) and regime classification.
+  - Volatility regime dispersion counts (Normal, Low, High, Extreme).
+
 ---
 
 ## 5. Navigation & State Management
@@ -153,24 +161,29 @@ function NavigationTrigger() {
 ## 6. Page Views & Capabilities
 
 1. **Dashboard (`DashboardPage.jsx`):**
-   - **Live Index Benchmarks:** Real-time KPI widgets for S&P 500 (SPY), Nasdaq 100 (QQQ), Bitcoin (BTC-USD), and Ethereum (ETH-USD) with click-to-explore navigation.
+   - **Live Index Benchmarks:** Real-time KPI widgets for S&P 500 (SPY), Nasdaq 100 (QQQ), Bitcoin (BTC-USD), and Ethereum (ETH-USD) enriched with real-time `TechnicalPostureBadge` pills and click-to-explore navigation.
    - **Market Breadth & Environment Bar:** Advancing vs. Declining asset count, average benchmark drift, provider connectivity health, and manual refresh controls.
+   - **Cross-Asset Market Regimes Distribution:** Comprehensive quantitative consensus overview showing market-wide trend distribution, average factor score, and volatility regime dispersion.
    - **Macro Regime Highlights:** Quantitative factor postures, consensus scores, and narrative rationales for core equity (SPY) and crypto (BTC-USD) benchmarks.
-   - **Active Benchmark Instruments Table:** Filterable by category (`all`, `equity`, `crypto`, `etf`) with live quotes, volume metrics, and direct "Inspect & Chart" deep-links.
+   - **Active Benchmark Instruments Table:** Filterable by category (`all`, `equity`, `crypto`, `etf`) with live quotes, volume metrics, technical posture pills, and direct "Inspect & Chart" deep-links.
 2. **Markets & Instruments (`MarketsPage.jsx`):**
    - Interactive filtering by asset category (`all`, `equity`, `crypto`, `etf`).
    - Debounced live text search filtering across symbols, company names, and exchanges.
    - Formatted market table with volumes, prices, and badges.
    - **Central Asset Detail Experience:** Clicking any instrument opens the dedicated [`AssetDetailModal`](../../frontend/src/components/market/AssetDetailModal.jsx) featuring:
-     - Header, pricing headline, and 24h High/Low range slider bar.
+     - Header, pricing headline with `TechnicalPostureBadge`, factor posture strip, and 24h High/Low range slider bar.
      - Key financial statistics grid (Open, High, Low, Previous Close, Volume, Classification).
      - **View Mode Navigation Tabs:** Toggle between `Comprehensive (Chart & Intelligence)`, `Technical Chart & Overlays`, `Market Intelligence & Factor Signals`, and `Instrument Profile & Provenance`.
      - Direct platform action buttons: "+ Watchlist", "+ Position in Portfolio", "Persist Quote Observation", and "Backfill 30-Day History".
 3. **Watchlists (`WatchlistsPage.jsx`):**
-   - User-defined instrument groupings (Mega-Cap Tech, Decentralized L1s, Macro Hedges).
-   - Tracked symbol chips and collective daily momentum.
+   - Multi-collection watchlist switcher (Mega-Cap Tech, Decentralized L1s, Macro Hedges, and custom user-created baskets).
+   - Real-time aggregate performance KPIs: Average Daily Drift, Technical Consensus % Bullish, and Consensus Factor Score.
+   - **Interactive Watchlist Table:** Live quotes, 24h changes, compact `TechnicalPostureBadge` pills, momentum classifications, volatility regimes, and direct modal inspection triggers.
+   - Seamless custom watchlist creation modal with comma/space symbol parsing.
 4. **Portfolios (`PortfoliosPage.jsx`):**
    - **Real-Time Marked-to-Market Valuation:** Dynamic valuation KPIs (Total Value, Unrealized P&L $ and %, Invested Cost Basis, Active Positions count) calculated against live provider quotes.
-   - **Open Holdings Table:** Interactive table tracking each holding's asset category, quantity, average entry price, current market price, total market value, and unrealized return.
-   - **Position Lifecycle Management:** Seamless modal forms for adding/accumulating holdings (with auto-population when linked from asset inspection) and closing positions.
-   - **Multi-Portfolio Support:** Create and toggle across multiple dedicated portfolios (e.g. Retirement IRA, Speculative Tech, Core Multi-Asset).
+   - **Aggregate Risk & Volatility Exposure:** Portfolio-weighted factor health score, capital-weighted trend posture distribution track (% Bullish, % Neutral, % Bearish), asset allocation breakdown (Equity, Crypto, ETF), and volatility dispersion profile.
+   - **Open Holdings Table:** Interactive table tracking each holding's asset category, quantity, entry price, current price, market value, unrealized return, and `TechnicalPostureBadge` posture pill.
+   - **Holding Inspection:** Direct "Inspect" trigger opening [`AssetDetailModal`](../../frontend/src/components/market/AssetDetailModal.jsx) without leaving the portfolio screen.
+   - **Position Lifecycle Management:** Modal forms for adding/accumulating holdings and closing positions.
+   - **Multi-Portfolio Support:** Create and toggle across multiple dedicated portfolios.

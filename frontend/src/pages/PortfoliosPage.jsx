@@ -5,7 +5,9 @@ import { Badge } from '../components/common/Badge'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ErrorBanner } from '../components/common/ErrorBanner'
 import { useNavigation } from '../state/NavigationContext'
-import { PAGES } from '../state/pages'
+import { TechnicalPostureBadge } from '../components/analytics'
+import { AssetDetailModal } from '../components/market/AssetDetailModal'
+import { getAnalyticsSummary } from '../api/analytics'
 import {
   listPortfolios,
   createPortfolio,
@@ -14,9 +16,11 @@ import {
 } from '../api/portfolios'
 
 export function PortfoliosPage() {
-  const { navigate, pageParams } = useNavigation()
+  const { pageParams } = useNavigation()
   const [portfolios, setPortfolios] = useState([])
   const [activePortfolioId, setActivePortfolioId] = useState(null)
+  const [portfolioIntelMap, setPortfolioIntelMap] = useState({})
+  const [inspectInstrument, setInspectInstrument] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [actionFeedback, setActionFeedback] = useState(null)
@@ -72,6 +76,33 @@ export function PortfoliosPage() {
 
   const activePortfolio =
     portfolios.find((p) => p.id === activePortfolioId) || portfolios[0] || null
+
+  // On-demand fetch of analytics intelligence for active holdings
+  useEffect(() => {
+    let isCancelled = false
+    const posList = activePortfolio?.positions || []
+    if (!posList.length) return
+
+    const distinctSymbols = [...new Set(posList.map((p) => p.symbol))]
+    Promise.all(
+      distinctSymbols.map((sym) =>
+        getAnalyticsSummary(sym, 365, '1d').catch(() => null)
+      )
+    ).then((results) => {
+      if (isCancelled) return
+      const intelMap = {}
+      distinctSymbols.forEach((sym, idx) => {
+        if (results[idx]?.data) {
+          intelMap[sym] = results[idx].data
+        }
+      })
+      setPortfolioIntelMap((prev) => ({ ...prev, ...intelMap }))
+    })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [activePortfolio?.positions])
 
   const handleCreatePortfolio = async (e) => {
     e.preventDefault()
@@ -152,6 +183,62 @@ export function PortfoliosPage() {
   const totalPnl = activePortfolio ? Number(activePortfolio.total_unrealized_pnl) : 0
   const totalPnlPct = activePortfolio ? Number(activePortfolio.total_unrealized_pnl_percent) : 0
   const positions = activePortfolio?.positions || []
+
+  // Aggregate Risk and Volatility exposure calculations
+  let weightedFactorScoreSum = 0
+  let bullValue = 0
+  let bearValue = 0
+  let neutValue = 0
+  let equityValue = 0
+  let cryptoValue = 0
+  let etfValue = 0
+  const portfolioVolCounts = { low: 0, normal: 0, high: 0, extreme: 0 }
+
+  positions.forEach((pos) => {
+    const mv = Number(pos.market_value || 0)
+    const intel = portfolioIntelMap[pos.symbol]
+    const score = intel?.composite_score !== undefined ? Number(intel.composite_score) : 50
+    weightedFactorScoreSum += mv * score
+
+    const posture = String(intel?.trend_posture || '').toLowerCase()
+    if (posture.includes('bull') || posture.includes('golden')) {
+      bullValue += mv
+    } else if (posture.includes('bear') || posture.includes('death')) {
+      bearValue += mv
+    } else {
+      neutValue += mv
+    }
+
+    const assetClass = String(pos.asset_type || '').toLowerCase()
+    if (assetClass === 'crypto') {
+      cryptoValue += mv
+    } else if (assetClass === 'etf') {
+      etfValue += mv
+    } else {
+      equityValue += mv
+    }
+
+    const vol = String(intel?.volatility_regime || 'normal').toLowerCase()
+    if (portfolioVolCounts[vol] !== undefined) {
+      portfolioVolCounts[vol] += 1
+    } else {
+      portfolioVolCounts.normal += 1
+    }
+  })
+
+  const portfolioWeightedScore = totalValuation > 0
+    ? Math.round(weightedFactorScoreSum / totalValuation)
+    : 55
+  const portfolioBullPct = totalValuation > 0
+    ? Math.round((bullValue / totalValuation) * 100)
+    : 0
+  const portfolioBearPct = totalValuation > 0
+    ? Math.round((bearValue / totalValuation) * 100)
+    : 0
+  const portfolioNeutPct = Math.max(0, 100 - portfolioBullPct - portfolioBearPct)
+  const equityPct = totalValuation > 0 ? Math.round((equityValue / totalValuation) * 100) : 0
+  const cryptoPct = totalValuation > 0 ? Math.round((cryptoValue / totalValuation) * 100) : 0
+  const etfPct = totalValuation > 0 ? Math.round((etfValue / totalValuation) * 100) : 0
 
   return (
     <div id="cf-portfolios-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-6)' }}>
@@ -317,6 +404,90 @@ export function PortfoliosPage() {
         />
       </div>
 
+      {/* Aggregate Risk & Volatility Exposure Card */}
+      {positions.length > 0 && (
+        <Card
+          id="cf-portfolio-risk-card"
+          title="Aggregate Risk & Volatility Exposure"
+          subtitle="Capital concentration, trend alignment, and quantitative factor health"
+          action={
+            <Badge variant={portfolioWeightedScore >= 60 ? 'bullish' : portfolioWeightedScore <= 40 ? 'bearish' : 'neutral'} size="sm">
+              {portfolioWeightedScore >= 60 ? 'Favorable Risk Stance' : portfolioWeightedScore <= 40 ? 'Defensive Stance' : 'Balanced Exposure'}
+            </Badge>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-4)' }}>
+            {/* Trend Posture Distribution Track */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
+                <span style={{ color: 'var(--cf-text-secondary)', fontWeight: 600 }}>Trend Posture Exposure (by Market Value)</span>
+                <div style={{ display: 'flex', gap: '12px', fontSize: '11px', fontWeight: 600 }}>
+                  <span style={{ color: 'var(--cf-bullish)' }}>▲ {portfolioBullPct}% Bullish (${bullValue.toLocaleString(undefined, { maximumFractionDigits: 0 })})</span>
+                  <span style={{ color: 'var(--cf-text-muted)' }}>■ {portfolioNeutPct}% Neutral (${neutValue.toLocaleString(undefined, { maximumFractionDigits: 0 })})</span>
+                  <span style={{ color: 'var(--cf-bearish)' }}>▼ {portfolioBearPct}% Bearish (${bearValue.toLocaleString(undefined, { maximumFractionDigits: 0 })})</span>
+                </div>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  height: '8px',
+                  borderRadius: 'var(--cf-radius-full)',
+                  overflow: 'hidden',
+                  background: 'var(--cf-bg-surface-elevated)',
+                }}
+              >
+                <div style={{ width: `${portfolioBullPct}%`, background: 'var(--cf-bullish)' }} />
+                <div style={{ width: `${portfolioNeutPct}%`, background: 'var(--cf-border-strong)' }} />
+                <div style={{ width: `${portfolioBearPct}%`, background: 'var(--cf-bearish)' }} />
+              </div>
+            </div>
+
+            {/* Metrics 3-Col Grid: Weighted Factor Health, Asset Class Allocation, Volatility Regimes */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--cf-space-3)' }}>
+              <div style={{ background: 'var(--cf-bg-base)', border: '1px solid var(--cf-border)', borderRadius: 'var(--cf-radius-md)', padding: '12px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>
+                  Portfolio Factor Health
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
+                  <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--cf-brand-cyan)' }}>
+                    {portfolioWeightedScore}
+                  </span>
+                  <span style={{ fontSize: '12px', color: 'var(--cf-text-muted)' }}>/ 100</span>
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--cf-text-secondary)', marginTop: '2px' }}>
+                  Capital-weighted multi-factor rating
+                </div>
+              </div>
+
+              <div style={{ background: 'var(--cf-bg-base)', border: '1px solid var(--cf-border)', borderRadius: 'var(--cf-radius-md)', padding: '12px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>
+                  Asset Class Allocation
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
+                  <Badge variant="neutral" size="sm">Equity: {equityPct}%</Badge>
+                  <Badge variant="brand" size="sm">Crypto: {cryptoPct}%</Badge>
+                  <Badge variant="warning" size="sm">ETF: {etfPct}%</Badge>
+                </div>
+              </div>
+
+              <div style={{ background: 'var(--cf-bg-base)', border: '1px solid var(--cf-border)', borderRadius: 'var(--cf-radius-md)', padding: '12px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>
+                  Volatility Dispersion
+                </div>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--cf-text-primary)', fontWeight: 600 }}>
+                    {portfolioVolCounts.normal} Normal
+                  </span>
+                  {portfolioVolCounts.low > 0 && <span style={{ fontSize: '11px', color: 'var(--cf-brand-cyan)' }}>· {portfolioVolCounts.low} Low</span>}
+                  {portfolioVolCounts.high > 0 && <span style={{ fontSize: '11px', color: 'var(--cf-warning)' }}>· {portfolioVolCounts.high} High</span>}
+                  {portfolioVolCounts.extreme > 0 && <span style={{ fontSize: '11px', color: 'var(--cf-bearish)' }}>· {portfolioVolCounts.extreme} Extreme</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Positions Table */}
       <Card
         id="cf-positions-table-card"
@@ -388,6 +559,7 @@ export function PortfoliosPage() {
                   <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>CURRENT PRICE</th>
                   <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>MARKET VALUE</th>
                   <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>UNREALIZED P&L</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>SIGNALS & POSTURE</th>
                   <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>ACTION</th>
                 </tr>
               </thead>
@@ -410,7 +582,14 @@ export function PortfoliosPage() {
                     >
                       <td style={{ padding: '14px 16px' }}>
                         <div
-                          onClick={() => navigate(PAGES.MARKETS, { symbol: pos.symbol })}
+                          onClick={() =>
+                            setInspectInstrument({
+                              symbol: pos.symbol,
+                              name: pos.name,
+                              assetType: pos.asset_type,
+                              price: pos.current_price,
+                            })
+                          }
                           style={{
                             fontWeight: 700,
                             color: 'var(--cf-brand-cyan)',
@@ -451,23 +630,56 @@ export function PortfoliosPage() {
                         </div>
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        <button
-                          id={`btn-close-pos-${pos.symbol}`}
-                          onClick={() => handleRemovePosition(pos.id, pos.symbol)}
-                          title="Remove position from portfolio"
-                          style={{
-                            background: 'rgba(239, 68, 68, 0.12)',
-                            color: 'var(--cf-bearish)',
-                            border: '1px solid rgba(239, 68, 68, 0.25)',
-                            borderRadius: 'var(--cf-radius-sm)',
-                            padding: '4px 8px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Remove
-                        </button>
+                        <TechnicalPostureBadge
+                          posture={portfolioIntelMap[pos.symbol]}
+                          showScore
+                          size="sm"
+                          id={`portfolio-posture-${pos.symbol}`}
+                        />
+                      </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <button
+                            id={`btn-inspect-pos-${pos.symbol}`}
+                            onClick={() =>
+                              setInspectInstrument({
+                                symbol: pos.symbol,
+                                name: pos.name,
+                                assetType: pos.asset_type,
+                                price: pos.current_price,
+                              })
+                            }
+                            style={{
+                              background: 'rgba(59, 130, 246, 0.12)',
+                              color: 'var(--cf-brand-primary)',
+                              border: '1px solid rgba(59, 130, 246, 0.25)',
+                              borderRadius: 'var(--cf-radius-sm)',
+                              padding: '4px 8px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Inspect
+                          </button>
+                          <button
+                            id={`btn-close-pos-${pos.symbol}`}
+                            onClick={() => handleRemovePosition(pos.id, pos.symbol)}
+                            title="Remove position from portfolio"
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.12)',
+                              color: 'var(--cf-bearish)',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              borderRadius: 'var(--cf-radius-sm)',
+                              padding: '4px 8px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -772,6 +984,15 @@ export function PortfoliosPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Asset Detail Modal for deep inspection from portfolio */}
+      {inspectInstrument && (
+        <AssetDetailModal
+          instrument={inspectInstrument}
+          intelligence={portfolioIntelMap[inspectInstrument.symbol]}
+          onClose={() => setInspectInstrument(null)}
+        />
       )}
     </div>
   )
