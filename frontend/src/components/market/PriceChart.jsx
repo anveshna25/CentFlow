@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { EmptyState } from '../common/EmptyState'
 
 /**
  * Interactive PriceChart component supporting Line and Candlestick modes,
@@ -623,18 +624,13 @@ export function PriceChart({
         )}
 
         {sortedBars.length === 0 && !isLoading ? (
-          <div
-            style={{
-              height: '300px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--cf-text-muted)',
-              fontSize: '13px',
-            }}
-          >
-            No historical price bars available for {symbol}.
-          </div>
+          <EmptyState
+            id={`${id}-empty-state`}
+            icon="chart"
+            title="No Historical Observations"
+            description={`Historical price observations for ${symbol} are not available for this timeframe.`}
+            minHeight="300px"
+          />
         ) : (
           <svg
             id={`${id}-svg`}
