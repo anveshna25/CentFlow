@@ -89,7 +89,26 @@ The [`PriceChart`](../../frontend/src/components/market/PriceChart.jsx) provides
 - **Dynamic Timeframes:** Support for `1D`, `1W`, `1M`, `1Y`, and `ALL` intervals with automated scale recalculation.
 - **Volume Histogram:** Lower 18% histogram reflecting trading volume with bullish/bearish tinting.
 - **Hover Crosshairs & Glassmorphism Tooltip:** Interactive crosshair tracking the closest observation, displaying exact open, high, low, close, volume, and date.
+- **Technical Indicator Overlays:**
+  - **SMA 20 & SMA 50:** Moving average trend curves (amber and magenta).
+  - **EMA 12:** Exponential moving average short-term trend curve (cyan).
+  - **Bollinger Bands:** Upper and lower volatility envelope (dashed indigo) with translucent corridor fill and middle moving average line.
+- **Oscillator Sub-Chart Panels:**
+  - **RSI (14):** Dedicated oscillator sub-panel with 70 overbought and 30 oversold reference levels, 50 centerline, and lavender oscillator line.
+  - **MACD (12, 26, 9):** Dedicated sub-panel with zero centerline, positive/negative histogram bars, MACD line (cyan), and Signal line (orange).
+- **Synchronized Multi-Panel Crosshairs:** When scrubbing across the chart, the crosshair slices through primary price, volume bars, RSI, and MACD panels simultaneously, displaying active values in the tooltip.
 - **Responsive Layout:** Automatically adapts to container dimensions via `ResizeObserver`.
+
+### 4.2 Market Intelligence Card (`MarketIntelligenceCard.jsx`)
+
+The [`MarketIntelligenceCard`](../../frontend/src/components/market/MarketIntelligenceCard.jsx) renders high-level quantitative intelligence synthesized by CentFlow's analytics engine:
+- **Composite Technical Score Gauge (0–100):** Visual score display with dynamic color-coding (Strong Bullish, Bullish, Neutral, Cautious, Bearish).
+- **Trend Posture Badge:** Primary directional bias (Bullish / Bearish / Neutral) with alignment arrow icons.
+- **Momentum State:** Oscillator impulse state derived from RSI and MACD.
+- **Volatility Regime:** Bandwidth and return volatility rating (Low, Normal, High, Extreme).
+- **Synthesis Verdict Callout:** Plain-English summary headline explaining the current technical setup.
+- **Factor Drivers & Rationales:** List of deterministic bullet explanations detailing the exact conditions driving the evaluation.
+- **Risk & Performance Distribution:** Historical period returns, annualized volatility, max drawdown, and recovery status.
 
 ---
 
@@ -126,7 +145,12 @@ function NavigationTrigger() {
    - Interactive filtering by asset category (`all`, `equity`, `crypto`, `etf`).
    - Debounced live text search filtering across symbols, company names, and exchanges.
    - Formatted market table with volumes, prices, and badges.
-   - **Interactive Modal Inspection:** Clicking any instrument opens a full-screen drawer modal featuring the live `PriceChart`, key statistics (Open, 24h High/Low, Previous Close, Volume), and action triggers to persist quotes or backfill 30-day historical bars.
+   - **Interactive Modal Inspection:** Clicking any instrument opens a comprehensive drawer modal featuring:
+     - Header and key statistics grid (Price, 24h Change, Open, High, Low, Volume).
+     - **View Mode Navigation Tabs:** Toggle between `Comprehensive (Chart & Intelligence)`, `Technical Chart & Overlays`, and `Market Intelligence & Factor Signals`.
+     - Integrated `MarketIntelligenceCard` with score gauge and deterministic drivers.
+     - Interactive `PriceChart` with technical overlays and oscillator panels.
+     - Action triggers to persist live quote observations or backfill 30-day historical bars with automated recalculation refresh.
 3. **Watchlists (`WatchlistsPage.jsx`):**
    - User-defined instrument groupings (Mega-Cap Tech, Decentralized L1s, Macro Hedges).
    - Tracked symbol chips and collective daily momentum.

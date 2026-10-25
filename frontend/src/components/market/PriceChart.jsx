@@ -2,10 +2,13 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 
 /**
  * Interactive PriceChart component supporting Line and Candlestick modes,
- * customizable timeframes, volume histogram, and hover crosshair with tooltip.
+ * customizable timeframes, volume histogram, hover crosshair with synchronized
+ * tooltips, technical indicator overlays (SMA 20/50, EMA 12, Bollinger Bands),
+ * and oscillator sub-chart panels (RSI 14, MACD 12/26/9).
  */
 export function PriceChart({
   data = [],
+  indicators = null,
   symbol = '',
   currency = 'USD',
   isLoading = false,
@@ -18,6 +21,14 @@ export function PriceChart({
   const [containerWidth, setContainerWidth] = useState(600)
   const [chartType, setChartType] = useState('line') // 'line' | 'candles'
   const [hoverIndex, setHoverIndex] = useState(null)
+
+  // Indicator toggle state
+  const [showSma20, setShowSma20] = useState(false)
+  const [showSma50, setShowSma50] = useState(false)
+  const [showEma12, setShowEma12] = useState(false)
+  const [showBollinger, setShowBollinger] = useState(false)
+  const [showRsi, setShowRsi] = useState(false)
+  const [showMacd, setShowMacd] = useState(false)
 
   // Measure container width responsively
   useEffect(() => {
@@ -36,13 +47,25 @@ export function PriceChart({
   }, [])
 
   // Geometry dimensions
-  const padding = { top: 24, right: 65, bottom: 44, left: 16 }
+  const padding = { top: 24, right: 65, bottom: 20, left: 16 }
   const plotWidth = Math.max(100, containerWidth - padding.left - padding.right)
-  const pricePlotHeight = Math.max(80, height * 0.65 - padding.top)
-  const volumePlotHeight = Math.max(20, height * 0.18)
+  const pricePlotHeight = Math.max(80, height * 0.62 - padding.top)
+  const volumePlotHeight = Math.max(20, height * 0.16)
   const volumeTop = padding.top + pricePlotHeight + 14
 
-  // Process and sort bars by timestamp
+  // Oscillator sub-chart heights
+  const rsiHeight = 70
+  const macdHeight = 70
+  const rsiTop = volumeTop + volumePlotHeight + (showRsi ? 18 : 0)
+  const macdTop = rsiTop + (showRsi ? rsiHeight + 18 : 0)
+  const totalSvgHeight =
+    volumeTop +
+    volumePlotHeight +
+    (showRsi ? rsiHeight + 24 : 0) +
+    (showMacd ? macdHeight + 24 : 0) +
+    padding.bottom
+
+  // Process and sort bars chronologically
   const sortedBars = useMemo(() => {
     if (!data || data.length === 0) return []
     return [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
@@ -114,7 +137,160 @@ export function PriceChart({
     [maxVolume, volumePlotHeight, volumeTop]
   )
 
-  // Generate SVG path for line and area gradient
+  // RSI coordinate mapper (0 to 100 scale)
+  const getRsiY = useCallback(
+    (rsiVal) => {
+      const r = Math.max(0, Math.min(100, Number(rsiVal)))
+      return rsiTop + rsiHeight - (r / 100) * rsiHeight
+    },
+    [rsiTop, rsiHeight]
+  )
+
+  // MACD coordinate mapper
+  const { minMacd, maxMacd } = useMemo(() => {
+    if (!indicators?.macd) return { minMacd: -1, maxMacd: 1 }
+    const m = indicators.macd
+    let extreme = 0.5
+    const checkVal = (v) => {
+      if (v !== null && v !== undefined) {
+        const abs = Math.abs(Number(v))
+        if (abs > extreme) extreme = abs
+      }
+    }
+    ;(m.macd_line || []).forEach(checkVal)
+    ;(m.signal_line || []).forEach(checkVal)
+    ;(m.histogram || []).forEach(checkVal)
+
+    return { minMacd: -extreme * 1.15, maxMacd: extreme * 1.15 }
+  }, [indicators])
+
+  const getMacdY = useCallback(
+    (val) => {
+      const v = Number(val)
+      const ratio = (v - minMacd) / (maxMacd - minMacd || 1)
+      return macdTop + macdHeight - ratio * macdHeight
+    },
+    [minMacd, maxMacd, macdTop, macdHeight]
+  )
+
+  // Helper to construct SVG path from indicator series
+  const buildSeriesPath = useCallback(
+    (series) => {
+      if (!series || series.length === 0 || sortedBars.length === 0) return ''
+      let path = ''
+      let inSegment = false
+
+      // Match length or align to sortedBars
+      const len = Math.min(sortedBars.length, series.length)
+      for (let i = 0; i < len; i++) {
+        const val = series[i]
+        if (val !== null && val !== undefined) {
+          const x = getX(i)
+          const y = getY(val)
+          if (!inSegment) {
+            path += `M ${x.toFixed(1)},${y.toFixed(1)} `
+            inSegment = true
+          } else {
+            path += `L ${x.toFixed(1)},${y.toFixed(1)} `
+          }
+        } else {
+          inSegment = false
+        }
+      }
+      return path
+    },
+    [getX, getY, sortedBars.length]
+  )
+
+  // Bollinger Bands paths (Upper, Middle, Lower, and shaded envelope)
+  const { bbUpperPath, bbLowerPath, bbMiddlePath, bbAreaPath } = useMemo(() => {
+    if (!indicators?.bollinger) return { bbUpperPath: '', bbLowerPath: '', bbMiddlePath: '', bbAreaPath: '' }
+    const { upper_band, middle_band, lower_band } = indicators.bollinger
+    const uPath = buildSeriesPath(upper_band)
+    const mPath = buildSeriesPath(middle_band)
+    const lPath = buildSeriesPath(lower_band)
+
+    // Build shaded cloud polygon between upper and lower
+    let areaP = ''
+    if (upper_band && lower_band) {
+      const len = Math.min(sortedBars.length, upper_band.length, lower_band.length)
+      const upperPoints = []
+      const lowerPoints = []
+      for (let i = 0; i < len; i++) {
+        const u = upper_band[i]
+        const l = lower_band[i]
+        if (u !== null && u !== undefined && l !== null && l !== undefined) {
+          upperPoints.push(`${getX(i).toFixed(1)},${getY(u).toFixed(1)}`)
+          lowerPoints.unshift(`${getX(i).toFixed(1)},${getY(l).toFixed(1)}`)
+        }
+      }
+      if (upperPoints.length > 0) {
+        areaP = `M ${upperPoints.join(' L ')} L ${lowerPoints.join(' L ')} Z`
+      }
+    }
+
+    return { bbUpperPath: uPath, bbLowerPath: lPath, bbMiddlePath: mPath, bbAreaPath: areaP }
+  }, [indicators, sortedBars.length, buildSeriesPath, getX, getY])
+
+  // RSI Path
+  const rsiPath = useMemo(() => {
+    if (!indicators?.rsi || !showRsi) return ''
+    let path = ''
+    let inSeg = false
+    const len = Math.min(sortedBars.length, indicators.rsi.length)
+    for (let i = 0; i < len; i++) {
+      const val = indicators.rsi[i]
+      if (val !== null && val !== undefined) {
+        const x = getX(i)
+        const y = getRsiY(val)
+        if (!inSeg) {
+          path += `M ${x.toFixed(1)},${y.toFixed(1)} `
+          inSeg = true
+        } else {
+          path += `L ${x.toFixed(1)},${y.toFixed(1)} `
+        }
+      } else {
+        inSeg = false
+      }
+    }
+    return path
+  }, [indicators, showRsi, sortedBars.length, getX, getRsiY])
+
+  // MACD Paths
+  const { macdLinePath, macdSignalPath } = useMemo(() => {
+    if (!indicators?.macd || !showMacd) return { macdLinePath: '', macdSignalPath: '' }
+    const { macd_line, signal_line } = indicators.macd
+
+    const buildMacdPath = (series) => {
+      if (!series) return ''
+      let path = ''
+      let inSeg = false
+      const len = Math.min(sortedBars.length, series.length)
+      for (let i = 0; i < len; i++) {
+        const val = series[i]
+        if (val !== null && val !== undefined) {
+          const x = getX(i)
+          const y = getMacdY(val)
+          if (!inSeg) {
+            path += `M ${x.toFixed(1)},${y.toFixed(1)} `
+            inSeg = true
+          } else {
+            path += `L ${x.toFixed(1)},${y.toFixed(1)} `
+          }
+        } else {
+          inSeg = false
+        }
+      }
+      return path
+    }
+
+    return {
+      macdLinePath: buildMacdPath(macd_line),
+      macdSignalPath: buildMacdPath(signal_line),
+    }
+  }, [indicators, showMacd, sortedBars.length, getX, getMacdY])
+
+  // Generate SVG path for primary price line and area gradient
   const { linePath, areaPath } = useMemo(() => {
     if (sortedBars.length === 0) return { linePath: '', areaPath: '' }
 
@@ -133,7 +309,7 @@ export function PriceChart({
     return { linePath: lPath, areaPath: aPath }
   }, [sortedBars, getX, getY, padding.top, pricePlotHeight])
 
-  // Interactive mouse move for crosshair
+  // Interactive mouse move for synchronized crosshair
   const handleMouseMove = (e) => {
     if (!sortedBars.length) return
     const rect = e.currentTarget.getBoundingClientRect()
@@ -149,7 +325,7 @@ export function PriceChart({
     setHoverIndex(null)
   }
 
-  // Active bar under crosshair or latest bar
+  // Active bar and indicator readings under crosshair
   const activeBar = hoverIndex !== null ? sortedBars[hoverIndex] : sortedBars[sortedBars.length - 1]
   const themeColor = isNetUp ? 'var(--cf-bullish)' : 'var(--cf-bearish)'
   const candleWidth = Math.max(3, Math.min(14, (plotWidth / (sortedBars.length || 1)) * 0.65))
@@ -293,8 +469,138 @@ export function PriceChart({
         </div>
       </div>
 
+      {/* Technical Indicators Toolbar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          flexWrap: 'wrap',
+          padding: '4px 0',
+          fontSize: '11px',
+        }}
+      >
+        <span style={{ color: 'var(--cf-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Overlays:
+        </span>
+        <button
+          id={`${id}-toggle-sma20`}
+          onClick={() => setShowSma20(!showSma20)}
+          style={{
+            padding: '3px 8px',
+            borderRadius: 'var(--cf-radius-sm)',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            border: '1px solid',
+            borderColor: showSma20 ? '#f59e0b' : 'var(--cf-border)',
+            background: showSma20 ? 'rgba(245, 158, 11, 0.15)' : 'var(--cf-bg-base)',
+            color: showSma20 ? '#f59e0b' : 'var(--cf-text-secondary)',
+            transition: 'all var(--cf-transition-fast)',
+          }}
+        >
+          SMA 20
+        </button>
+        <button
+          id={`${id}-toggle-sma50`}
+          onClick={() => setShowSma50(!showSma50)}
+          style={{
+            padding: '3px 8px',
+            borderRadius: 'var(--cf-radius-sm)',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            border: '1px solid',
+            borderColor: showSma50 ? '#ec4899' : 'var(--cf-border)',
+            background: showSma50 ? 'rgba(236, 72, 153, 0.15)' : 'var(--cf-bg-base)',
+            color: showSma50 ? '#ec4899' : 'var(--cf-text-secondary)',
+            transition: 'all var(--cf-transition-fast)',
+          }}
+        >
+          SMA 50
+        </button>
+        <button
+          id={`${id}-toggle-ema12`}
+          onClick={() => setShowEma12(!showEma12)}
+          style={{
+            padding: '3px 8px',
+            borderRadius: 'var(--cf-radius-sm)',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            border: '1px solid',
+            borderColor: showEma12 ? 'var(--cf-brand-cyan)' : 'var(--cf-border)',
+            background: showEma12 ? 'rgba(6, 182, 212, 0.15)' : 'var(--cf-bg-base)',
+            color: showEma12 ? 'var(--cf-brand-cyan)' : 'var(--cf-text-secondary)',
+            transition: 'all var(--cf-transition-fast)',
+          }}
+        >
+          EMA 12
+        </button>
+        <button
+          id={`${id}-toggle-bollinger`}
+          onClick={() => setShowBollinger(!showBollinger)}
+          style={{
+            padding: '3px 8px',
+            borderRadius: 'var(--cf-radius-sm)',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            border: '1px solid',
+            borderColor: showBollinger ? '#818cf8' : 'var(--cf-border)',
+            background: showBollinger ? 'rgba(129, 140, 248, 0.15)' : 'var(--cf-bg-base)',
+            color: showBollinger ? '#818cf8' : 'var(--cf-text-secondary)',
+            transition: 'all var(--cf-transition-fast)',
+          }}
+        >
+          Bollinger Bands
+        </button>
+
+        <span style={{ color: 'var(--cf-border)', margin: '0 4px' }}>|</span>
+
+        <span style={{ color: 'var(--cf-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Oscillators:
+        </span>
+        <button
+          id={`${id}-toggle-rsi`}
+          onClick={() => setShowRsi(!showRsi)}
+          style={{
+            padding: '3px 8px',
+            borderRadius: 'var(--cf-radius-sm)',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            border: '1px solid',
+            borderColor: showRsi ? '#c084fc' : 'var(--cf-border)',
+            background: showRsi ? 'rgba(192, 132, 252, 0.15)' : 'var(--cf-bg-base)',
+            color: showRsi ? '#c084fc' : 'var(--cf-text-secondary)',
+            transition: 'all var(--cf-transition-fast)',
+          }}
+        >
+          RSI (14)
+        </button>
+        <button
+          id={`${id}-toggle-macd`}
+          onClick={() => setShowMacd(!showMacd)}
+          style={{
+            padding: '3px 8px',
+            borderRadius: 'var(--cf-radius-sm)',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            border: '1px solid',
+            borderColor: showMacd ? '#38bdf8' : 'var(--cf-border)',
+            background: showMacd ? 'rgba(56, 189, 248, 0.15)' : 'var(--cf-bg-base)',
+            color: showMacd ? '#38bdf8' : 'var(--cf-text-secondary)',
+            transition: 'all var(--cf-transition-fast)',
+          }}
+        >
+          MACD (12, 26, 9)
+        </button>
+      </div>
+
       {/* Main SVG Area */}
-      <div style={{ position: 'relative', width: '100%', height: `${height}px` }}>
+      <div style={{ position: 'relative', width: '100%', minHeight: `${totalSvgHeight}px` }}>
         {isLoading && (
           <div
             style={{
@@ -319,7 +625,7 @@ export function PriceChart({
         {sortedBars.length === 0 && !isLoading ? (
           <div
             style={{
-              height: '100%',
+              height: '300px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -333,7 +639,7 @@ export function PriceChart({
           <svg
             id={`${id}-svg`}
             width="100%"
-            height={height}
+            height={totalSvgHeight}
             style={{ display: 'block', overflow: 'visible', cursor: 'crosshair' }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
@@ -373,44 +679,19 @@ export function PriceChart({
               )
             })}
 
-            {/* Volume Separator Line */}
-            <line
-              x1={padding.left}
-              y1={volumeTop - 4}
-              x2={padding.left + plotWidth}
-              y2={volumeTop - 4}
-              stroke="rgba(255, 255, 255, 0.08)"
-              strokeWidth="1"
-            />
-            <text
-              x={padding.left + plotWidth + 8}
-              y={volumeTop + 10}
-              fill="var(--cf-text-muted)"
-              fontSize="9"
-              fontFamily="var(--cf-font-sans)"
-            >
-              Vol
-            </text>
-
-            {/* Volume Bars */}
-            {sortedBars.map((b, idx) => {
-              const x = getX(idx)
-              const y = getVolY(b.volume)
-              const barH = volumeTop + volumePlotHeight - y
-              const barColor = Number(b.close) >= Number(b.open) ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'
-              const bWidth = Math.max(1, candleWidth * 0.8)
-              return (
-                <rect
-                  key={`vol-${idx}`}
-                  x={x - bWidth / 2}
-                  y={y}
-                  width={bWidth}
-                  height={Math.max(1, barH)}
-                  fill={barColor}
-                  rx="1"
-                />
-              )
-            })}
+            {/* Bollinger Bands Shaded Area & Envelope Lines */}
+            {showBollinger && bbAreaPath && (
+              <path d={bbAreaPath} fill="rgba(129, 140, 248, 0.08)" />
+            )}
+            {showBollinger && bbUpperPath && (
+              <path d={bbUpperPath} fill="none" stroke="#818cf8" strokeWidth="1.2" strokeDasharray="3 3" />
+            )}
+            {showBollinger && bbMiddlePath && (
+              <path d={bbMiddlePath} fill="none" stroke="#a5b4fc" strokeWidth="1.2" />
+            )}
+            {showBollinger && bbLowerPath && (
+              <path d={bbLowerPath} fill="none" stroke="#818cf8" strokeWidth="1.2" strokeDasharray="3 3" />
+            )}
 
             {/* Chart Mode: Line */}
             {chartType === 'line' && (
@@ -465,52 +746,239 @@ export function PriceChart({
                 )
               })}
 
-            {/* Time Axis Date Labels (approx 5 labels across range) */}
-            {sortedBars.length > 0 &&
-              [0, 0.25, 0.5, 0.75, 1].map((r, i) => {
-                const idx = Math.min(sortedBars.length - 1, Math.round(r * (sortedBars.length - 1)))
-                const bar = sortedBars[idx]
-                if (!bar) return null
-                const x = getX(idx)
-                const dateStr = new Date(bar.timestamp).toLocaleDateString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                })
-                return (
-                  <text
-                    key={`label-${i}`}
-                    x={x}
-                    y={height - 6}
-                    textAnchor="middle"
-                    fill="var(--cf-text-muted)"
-                    fontSize="10"
-                    fontFamily="var(--cf-font-sans)"
-                  >
-                    {dateStr}
-                  </text>
-                )
-              })}
+            {/* SMA 20 Overlay */}
+            {showSma20 && indicators?.sma_20 && (
+              <path
+                d={buildSeriesPath(indicators.sma_20)}
+                fill="none"
+                stroke="#f59e0b"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
 
-            {/* Interactive Crosshair & Tooltip Indicator */}
+            {/* SMA 50 Overlay */}
+            {showSma50 && indicators?.sma_50 && (
+              <path
+                d={buildSeriesPath(indicators.sma_50)}
+                fill="none"
+                stroke="#ec4899"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+
+            {/* EMA 12 Overlay */}
+            {showEma12 && indicators?.ema_12 && (
+              <path
+                d={buildSeriesPath(indicators.ema_12)}
+                fill="none"
+                stroke="var(--cf-brand-cyan)"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+
+            {/* Volume Separator Line */}
+            <line
+              x1={padding.left}
+              y1={volumeTop - 4}
+              x2={padding.left + plotWidth}
+              y2={volumeTop - 4}
+              stroke="rgba(255, 255, 255, 0.08)"
+              strokeWidth="1"
+            />
+            <text
+              x={padding.left + plotWidth + 8}
+              y={volumeTop + 10}
+              fill="var(--cf-text-muted)"
+              fontSize="9"
+              fontFamily="var(--cf-font-sans)"
+            >
+              Vol
+            </text>
+
+            {/* Volume Bars */}
+            {sortedBars.map((b, idx) => {
+              const x = getX(idx)
+              const y = getVolY(b.volume)
+              const barH = volumeTop + volumePlotHeight - y
+              const barColor = Number(b.close) >= Number(b.open) ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'
+              const bWidth = Math.max(1, candleWidth * 0.8)
+              return (
+                <rect
+                  key={`vol-${idx}`}
+                  x={x - bWidth / 2}
+                  y={y}
+                  width={bWidth}
+                  height={Math.max(1, barH)}
+                  fill={barColor}
+                  rx="1"
+                />
+              )
+            })}
+
+            {/* Oscillator Sub-Panel: RSI (14) */}
+            {showRsi && (
+              <g>
+                {/* Separator */}
+                <line
+                  x1={padding.left}
+                  y1={rsiTop - 6}
+                  x2={padding.left + plotWidth}
+                  y2={rsiTop - 6}
+                  stroke="rgba(255, 255, 255, 0.08)"
+                  strokeWidth="1"
+                />
+                {/* RSI Shaded Channel 30-70 */}
+                <rect
+                  x={padding.left}
+                  y={getRsiY(70)}
+                  width={plotWidth}
+                  height={getRsiY(30) - getRsiY(70)}
+                  fill="rgba(192, 132, 252, 0.04)"
+                />
+                {/* Reference Lines at 70, 50, 30 */}
+                <line
+                  x1={padding.left}
+                  y1={getRsiY(70)}
+                  x2={padding.left + plotWidth}
+                  y2={getRsiY(70)}
+                  stroke="rgba(239, 68, 68, 0.4)"
+                  strokeDasharray="3 3"
+                  strokeWidth="1"
+                />
+                <line
+                  x1={padding.left}
+                  y1={getRsiY(50)}
+                  x2={padding.left + plotWidth}
+                  y2={getRsiY(50)}
+                  stroke="rgba(255, 255, 255, 0.1)"
+                  strokeDasharray="2 2"
+                  strokeWidth="1"
+                />
+                <line
+                  x1={padding.left}
+                  y1={getRsiY(30)}
+                  x2={padding.left + plotWidth}
+                  y2={getRsiY(30)}
+                  stroke="rgba(16, 185, 129, 0.4)"
+                  strokeDasharray="3 3"
+                  strokeWidth="1"
+                />
+                {/* Axis Labels */}
+                <text x={padding.left + plotWidth + 8} y={rsiTop + 12} fill="#c084fc" fontSize="9" fontWeight="600">
+                  RSI
+                </text>
+                <text x={padding.left + plotWidth + 8} y={getRsiY(70) + 3} fill="rgba(239, 68, 68, 0.8)" fontSize="8">
+                  70
+                </text>
+                <text x={padding.left + plotWidth + 8} y={getRsiY(30) + 3} fill="rgba(16, 185, 129, 0.8)" fontSize="8">
+                  30
+                </text>
+                {/* RSI Curve */}
+                {rsiPath && (
+                  <path
+                    d={rsiPath}
+                    fill="none"
+                    stroke="#c084fc"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+              </g>
+            )}
+
+            {/* Oscillator Sub-Panel: MACD (12, 26, 9) */}
+            {showMacd && (
+              <g>
+                {/* Separator */}
+                <line
+                  x1={padding.left}
+                  y1={macdTop - 6}
+                  x2={padding.left + plotWidth}
+                  y2={macdTop - 6}
+                  stroke="rgba(255, 255, 255, 0.08)"
+                  strokeWidth="1"
+                />
+                {/* Zero Center Line */}
+                <line
+                  x1={padding.left}
+                  y1={getMacdY(0)}
+                  x2={padding.left + plotWidth}
+                  y2={getMacdY(0)}
+                  stroke="rgba(255, 255, 255, 0.18)"
+                  strokeWidth="1"
+                />
+                {/* MACD Histogram Bars */}
+                {indicators?.macd?.histogram &&
+                  sortedBars.map((_, idx) => {
+                    const hist = indicators.macd.histogram[idx]
+                    if (hist === null || hist === undefined) return null
+                    const x = getX(idx)
+                    const y0 = getMacdY(0)
+                    const yVal = getMacdY(hist)
+                    const barTop = Math.min(y0, yVal)
+                    const barH = Math.max(1, Math.abs(yVal - y0))
+                    const barColor = hist >= 0 ? 'rgba(16, 185, 129, 0.65)' : 'rgba(239, 68, 68, 0.65)'
+                    const bWidth = Math.max(1, candleWidth * 0.6)
+                    return (
+                      <rect
+                        key={`hist-${idx}`}
+                        x={x - bWidth / 2}
+                        y={barTop}
+                        width={bWidth}
+                        height={barH}
+                        fill={barColor}
+                        rx="1"
+                      />
+                    )
+                  })}
+                {/* MACD Line & Signal Line */}
+                {macdLinePath && (
+                  <path d={macdLinePath} fill="none" stroke="#38bdf8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                )}
+                {macdSignalPath && (
+                  <path d={macdSignalPath} fill="none" stroke="#fb923c" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                )}
+                {/* Axis Labels */}
+                <text x={padding.left + plotWidth + 8} y={macdTop + 12} fill="#38bdf8" fontSize="9" fontWeight="600">
+                  MACD
+                </text>
+                <text x={padding.left + plotWidth + 8} y={getMacdY(0) + 3} fill="var(--cf-text-muted)" fontSize="8">
+                  0
+                </text>
+              </g>
+            )}
+
+            {/* Synchronized Hover Crosshair */}
             {hoverIndex !== null && sortedBars[hoverIndex] && (
               (() => {
-                const hBar = sortedBars[hoverIndex]
                 const hX = getX(hoverIndex)
-                const hY = getY(hBar.close ?? hBar.price)
+                const hY = getY(sortedBars[hoverIndex].close ?? sortedBars[hoverIndex].price)
+                const fullChartBottom =
+                  volumeTop +
+                  volumePlotHeight +
+                  (showRsi ? rsiHeight + 24 : 0) +
+                  (showMacd ? macdHeight + 24 : 0)
 
                 return (
                   <g>
-                    {/* Vertical Crosshair Line */}
+                    {/* Full Vertical Crosshair */}
                     <line
                       x1={hX}
                       y1={padding.top}
                       x2={hX}
-                      y2={volumeTop + volumePlotHeight}
+                      y2={fullChartBottom}
                       stroke="rgba(255, 255, 255, 0.35)"
                       strokeWidth="1"
                       strokeDasharray="3 3"
                     />
-                    {/* Horizontal Price Crosshair Line */}
+                    {/* Horizontal Price Crosshair */}
                     <line
                       x1={padding.left}
                       y1={hY}
@@ -543,6 +1011,26 @@ export function PriceChart({
             const hX = getX(hoverIndex)
             const isLeft = hX < containerWidth / 2
 
+            // Look up indicator readings for the active hover index
+            const hSma20 = indicators?.sma_20 ? indicators.sma_20[hoverIndex] : null
+            const hSma50 = indicators?.sma_50 ? indicators.sma_50[hoverIndex] : null
+            const hEma12 = indicators?.ema_12 ? indicators.ema_12[hoverIndex] : null
+            const hRsi = indicators?.rsi ? indicators.rsi[hoverIndex] : null
+            const hBb = indicators?.bollinger
+              ? {
+                  upper: indicators.bollinger.upper_band[hoverIndex],
+                  mid: indicators.bollinger.middle_band[hoverIndex],
+                  lower: indicators.bollinger.lower_band[hoverIndex],
+                }
+              : null
+            const hMacd = indicators?.macd
+              ? {
+                  line: indicators.macd.macd_line[hoverIndex],
+                  sig: indicators.macd.signal_line[hoverIndex],
+                  hist: indicators.macd.histogram[hoverIndex],
+                }
+              : null
+
             return (
               <div
                 style={{
@@ -558,7 +1046,7 @@ export function PriceChart({
                   boxShadow: 'var(--cf-shadow-glass)',
                   pointerEvents: 'none',
                   zIndex: 20,
-                  minWidth: '150px',
+                  minWidth: '160px',
                 }}
               >
                 <div style={{ color: 'var(--cf-text-muted)', marginBottom: '4px', fontWeight: 600 }}>
@@ -591,6 +1079,62 @@ export function PriceChart({
                       <span>Volume:</span>
                       <span style={{ color: 'var(--cf-text-primary)', textAlign: 'right', fontWeight: 500 }}>
                         {Number(hBar.volume).toLocaleString()}
+                      </span>
+                    </>
+                  )}
+                  {showSma20 && hSma20 !== null && (
+                    <>
+                      <span style={{ color: '#f59e0b' }}>SMA 20:</span>
+                      <span style={{ color: '#f59e0b', textAlign: 'right', fontWeight: 600 }}>
+                        ${Number(hSma20).toFixed(2)}
+                      </span>
+                    </>
+                  )}
+                  {showSma50 && hSma50 !== null && (
+                    <>
+                      <span style={{ color: '#ec4899' }}>SMA 50:</span>
+                      <span style={{ color: '#ec4899', textAlign: 'right', fontWeight: 600 }}>
+                        ${Number(hSma50).toFixed(2)}
+                      </span>
+                    </>
+                  )}
+                  {showEma12 && hEma12 !== null && (
+                    <>
+                      <span style={{ color: 'var(--cf-brand-cyan)' }}>EMA 12:</span>
+                      <span style={{ color: 'var(--cf-brand-cyan)', textAlign: 'right', fontWeight: 600 }}>
+                        ${Number(hEma12).toFixed(2)}
+                      </span>
+                    </>
+                  )}
+                  {showBollinger && hBb && hBb.upper !== null && (
+                    <>
+                      <span style={{ color: '#818cf8' }}>BB Upper:</span>
+                      <span style={{ color: '#818cf8', textAlign: 'right', fontWeight: 600 }}>
+                        ${Number(hBb.upper).toFixed(2)}
+                      </span>
+                      <span style={{ color: '#818cf8' }}>BB Lower:</span>
+                      <span style={{ color: '#818cf8', textAlign: 'right', fontWeight: 600 }}>
+                        ${Number(hBb.lower).toFixed(2)}
+                      </span>
+                    </>
+                  )}
+                  {showRsi && hRsi !== null && (
+                    <>
+                      <span style={{ color: '#c084fc' }}>RSI:</span>
+                      <span style={{ color: '#c084fc', textAlign: 'right', fontWeight: 600 }}>
+                        {Number(hRsi).toFixed(1)}
+                      </span>
+                    </>
+                  )}
+                  {showMacd && hMacd && hMacd.line !== null && (
+                    <>
+                      <span style={{ color: '#38bdf8' }}>MACD:</span>
+                      <span style={{ color: '#38bdf8', textAlign: 'right', fontWeight: 600 }}>
+                        {Number(hMacd.line).toFixed(2)}
+                      </span>
+                      <span style={{ color: '#fb923c' }}>Signal:</span>
+                      <span style={{ color: '#fb923c', textAlign: 'right', fontWeight: 600 }}>
+                        {Number(hMacd.sig).toFixed(2)}
                       </span>
                     </>
                   )}
