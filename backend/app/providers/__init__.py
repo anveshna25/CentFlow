@@ -7,9 +7,11 @@ from app.providers.base import (
 )
 from app.providers.mock import MockMarketDataProvider
 from app.providers.registry import ProviderRegistry, get_provider
+from app.providers.yahoo import YahooMarketDataProvider
 
-# Register built-in mock provider
+# Register built-in providers
 ProviderRegistry.register("mock", MockMarketDataProvider)
+ProviderRegistry.register("yahoo", YahooMarketDataProvider)
 
 __all__ = [
     "BaseMarketDataProvider",
@@ -18,6 +20,7 @@ __all__ = [
     "ProviderInstrument",
     "ProviderStatus",
     "MockMarketDataProvider",
+    "YahooMarketDataProvider",
     "ProviderRegistry",
     "get_provider",
 ]
