@@ -180,11 +180,65 @@ Window $W = 20$, standard deviation multiplier $k = 2.0$:
 
 ---
 
-## 6. Next Steps in Phase 4
+## 6. Analytics Service Layer (`app/services/analytics.py`)
+
+The `AnalyticsService` coordinates data access and high-level analytical computations:
+
+- **Data Sources:** Prioritizes persisted database bars via `PriceRepository` when available, seamlessly falling back to cached external provider data via `MarketDataService`.
+- **Primary Capabilities:**
+  - `get_price_series(symbol, interval, lookback_days)`: Chronological price and timestamp series.
+  - `get_price_summary(symbol, interval, lookback_days)`: Min, max, mean, median, and counts.
+  - `get_performance_metrics(symbol, interval, lookback_days)`: Period returns, rolling volatility, drawdowns.
+  - `get_technical_indicators(symbol, interval, lookback_days, ...)`: Parameterized SMAs, EMAs, RSI, MACD, and Bollinger Bands.
+  - `get_market_intelligence(symbol, interval, lookback_days)`: Complete explainable market intelligence report.
+
+---
+
+## 7. Deterministic Market Intelligence Engine (`app/analytics/intelligence.py`)
+
+Synthesizes multiple technical dimensions into an explainable, rule-based intelligence report:
+
+### 1. Trend Posture
+Classifies directional alignment of the asset:
+- `bullish`: $P > \text{SMA}_{20} > \text{SMA}_{50} > \text{SMA}_{200}$.
+- `moderately_bullish`: Price trading above $\text{SMA}_{50}$.
+- `neutral`: Consolidating moving averages.
+- `moderately_bearish`: Price trading below $\text{SMA}_{50}$.
+- `bearish`: $P < \text{SMA}_{20} < \text{SMA}_{50} < \text{SMA}_{200}$.
+- `golden_cross`: $\text{SMA}_{50}$ crosses above $\text{SMA}_{200}$.
+- `death_cross`: $\text{SMA}_{50}$ crosses below $\text{SMA}_{200}$.
+
+### 2. Momentum State
+Combines RSI and MACD oscillator dynamics:
+- `overbought`: $\text{RSI}_{14} \ge 70$.
+- `bullish_momentum`: $\text{RSI}_{14} \ge 50$ with expanding positive MACD histogram.
+- `neutral`: $\text{RSI}_{14}$ balanced between 40 and 60.
+- `bearish_momentum`: $\text{RSI}_{14} < 50$ with negative MACD histogram.
+- `oversold`: $\text{RSI}_{14} \le 30$.
+
+### 3. Volatility Regime
+Classifies annualized return dispersion:
+- `low`: Annualized volatility $< 15\%$.
+- `normal`: $15\% \le \sigma_{\text{ann}} \le 35\%$.
+- `high`: $35\% < \sigma_{\text{ann}} \le 60\%$.
+- `extreme`: $\sigma_{\text{ann}} > 60\%$.
+
+### 4. Composite Technical Score (0 - 100)
+A calibrated composite index synthesizing:
+- Baseline: 50 (Neutral)
+- Trend component ($\pm 25$)
+- Momentum component ($\pm 20$)
+- Volatility adjustment ($\pm 5$)
+- Resulting verdict classifications: *Strong Bullish Uptrend* ($\ge 75$), *Moderate Bullish Bias* ($60-74$), *Neutral Consolidation* ($45-59$), *Moderate Bearish Bias* ($30-44$), *Strong Bearish Downtrend* ($< 30$), and *Oversold Reversal Watch* ($\text{RSI} \le 30$).
+- Transparent rationales explaining every deduction or credit.
+
+---
+
+## 8. Next Steps in Phase 4
 
 Following dependency order:
 1. **Issue #38 (Complete):** Analytics domain and core price-based calculations.
-2. **Issue #39 (Complete / Ready for PR):** Technical indicators engine (SMA, EMA, RSI, MACD, Bollinger Bands).
-3. **Issue #40:** Analytics service layer and market intelligence metrics (Trend, Momentum, Volatility Regime).
+2. **Issue #39 (Complete / Under Review in PR #44):** Technical indicators engine (SMA, EMA, RSI, MACD, Bollinger Bands).
+3. **Issue #40 (Complete / Ready for PR):** Analytics service layer and market intelligence metrics (Trend, Momentum, Volatility Regime).
 4. **Issue #41:** Analytics API endpoints and request/response schemas.
 5. **Issue #42:** Product integration into frontend dashboards and interactive charts.

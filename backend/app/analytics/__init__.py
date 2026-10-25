@@ -14,9 +14,13 @@ from app.analytics.domain import (
     DrawdownMetric,
     IndicatorSeries,
     MACDResult,
+    MarketIntelligenceSummary,
+    MomentumState,
     PeriodReturn,
     PriceSeriesSummary,
+    TrendPosture,
     VolatilityMetrics,
+    VolatilityRegime,
 )
 from app.analytics.indicators import (
     calculate_bollinger_bands,
@@ -25,6 +29,7 @@ from app.analytics.indicators import (
     calculate_rsi,
     calculate_sma,
 )
+from app.analytics.intelligence import synthesize_market_intelligence
 
 __all__ = [
     "CalculationPeriod",
@@ -35,6 +40,10 @@ __all__ = [
     "IndicatorSeries",
     "MACDResult",
     "BollingerBandsResult",
+    "TrendPosture",
+    "MomentumState",
+    "VolatilityRegime",
+    "MarketIntelligenceSummary",
     "to_decimal",
     "calculate_price_change",
     "calculate_returns",
@@ -48,4 +57,5 @@ __all__ = [
     "calculate_rsi",
     "calculate_macd",
     "calculate_bollinger_bands",
+    "synthesize_market_intelligence",
 ]
