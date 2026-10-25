@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback, useTransition, useRef } from 'react'
-import { Card } from '../components/common/Card'
-import { Badge } from '../components/common/Badge'
-import { LoadingSpinner } from '../components/common/LoadingSpinner'
-import { ErrorBanner } from '../components/common/ErrorBanner'
+import { Card, Badge, LoadingState, ErrorState, EmptyState } from '../components/common'
 import { AssetDetailModal } from '../components/market/AssetDetailModal'
 import { useNavigation } from '../state/NavigationContext'
 import {
@@ -327,8 +324,9 @@ export function MarketsPage({ externalSearch = '' }) {
     <div id="cf-markets-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-6)' }}>
       {/* Optional Error Alert */}
       {error && (
-        <ErrorBanner
+        <ErrorState
           error={error}
+          compact
           onRetry={loadInstruments}
           id="cf-markets-error-banner"
         />
@@ -371,7 +369,12 @@ export function MarketsPage({ externalSearch = '' }) {
 
       {/* Loading Indicator */}
       {isLoading && (
-        <LoadingSpinner message="Retrieving instruments and quotes from backend..." id="cf-markets-spinner" />
+        <LoadingState
+          title="Retrieving market instruments..."
+          description="Synchronizing quotes and metadata from the backend data feed"
+          size="sm"
+          id="cf-markets-spinner"
+        />
       )}
 
       {/* Main Table Card */}
@@ -429,47 +432,28 @@ export function MarketsPage({ externalSearch = '' }) {
         }
       >
         {filteredInstruments.length === 0 ? (
-          <div
+          <EmptyState
             id="cf-markets-empty-state"
-            style={{
-              padding: 'var(--cf-space-8) var(--cf-space-4)',
-              textAlign: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 'var(--cf-space-3)',
-            }}
-          >
-            <div style={{ fontSize: '32px', color: 'var(--cf-text-muted)' }}>🔍</div>
-            <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cf-text-primary)' }}>
-              No instruments found matching &ldquo;{activeSearch}&rdquo;
-            </div>
-            <div style={{ fontSize: '13px', color: 'var(--cf-text-secondary)', maxWidth: '420px' }}>
-              No assets in the catalog match your query under category &ldquo;{selectedCategory}&rdquo;. Try resetting the filters or searching for symbols like AAPL, BTC-USD, SPY.
-            </div>
-            <button
-              type="button"
-              id="cf-markets-reset-btn"
-              onClick={() => {
-                setLocalSearch('')
-                setSelectedCategory('all')
-              }}
-              style={{
-                marginTop: '8px',
-                background: 'var(--cf-brand-primary)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 'var(--cf-radius-md)',
-                padding: '8px 16px',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'opacity var(--cf-transition-fast)',
-              }}
-            >
-              Reset Filters & Show All Assets
-            </button>
-          </div>
+            icon="search"
+            title="No Matching Instruments"
+            description={
+              activeSearch || selectedCategory !== 'all'
+                ? `No instruments matched "${activeSearch}" in category "${selectedCategory}".`
+                : 'No market instruments are currently available.'
+            }
+            action={
+              activeSearch || selectedCategory !== 'all'
+                ? {
+                    label: 'Reset Filters & Show All',
+                    onClick: () => {
+                      setLocalSearch('')
+                      setSelectedCategory('all')
+                    },
+                    id: 'cf-reset-filters-btn',
+                  }
+                : null
+            }
+          />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
