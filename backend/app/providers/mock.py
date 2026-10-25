@@ -96,6 +96,32 @@ class MockMarketDataProvider(BaseMarketDataProvider):
             "previous_close": Decimal("507.60"),
             "volume": Decimal("65000000"),
         },
+        "QQQ": {
+            "name": "Invesco QQQ Trust (Nasdaq 100)",
+            "asset_type": "etf",
+            "currency": "USD",
+            "exchange": "NASDAQ",
+            "market": "US ETFs",
+            "price": Decimal("442.80"),
+            "open": Decimal("440.10"),
+            "high": Decimal("444.50"),
+            "low": Decimal("439.20"),
+            "previous_close": Decimal("439.50"),
+            "volume": Decimal("42100000"),
+        },
+        "NVDA": {
+            "name": "NVIDIA Corporation",
+            "asset_type": "equity",
+            "currency": "USD",
+            "exchange": "NASDAQ",
+            "market": "US Equities",
+            "price": Decimal("128.40"),
+            "open": Decimal("126.80"),
+            "high": Decimal("129.50"),
+            "low": Decimal("125.90"),
+            "previous_close": Decimal("125.75"),
+            "volume": Decimal("78500000"),
+        },
     }
 
     @property

@@ -139,8 +139,10 @@ function NavigationTrigger() {
 ## 6. Page Views & Capabilities
 
 1. **Dashboard (`DashboardPage.jsx`):**
-   - High-level KPIs: S&P 500 (SPY), Bitcoin (BTC-USD), Microsoft (MSFT), and active provider status.
-   - Active Market Watch table with real-time price indications and 24h delta percentages.
+   - **Live Index Benchmarks:** Real-time KPI widgets for S&P 500 (SPY), Nasdaq 100 (QQQ), Bitcoin (BTC-USD), and Ethereum (ETH-USD) with click-to-explore navigation.
+   - **Market Breadth & Environment Bar:** Advancing vs. Declining asset count, average benchmark drift, provider connectivity health, and manual refresh controls.
+   - **Macro Regime Highlights:** Quantitative factor postures, consensus scores, and narrative rationales for core equity (SPY) and crypto (BTC-USD) benchmarks.
+   - **Active Benchmark Instruments Table:** Filterable by category (`all`, `equity`, `crypto`, `etf`) with live quotes, volume metrics, and direct "Inspect & Chart" deep-links.
 2. **Markets & Instruments (`MarketsPage.jsx`):**
    - Interactive filtering by asset category (`all`, `equity`, `crypto`, `etf`).
    - Debounced live text search filtering across symbols, company names, and exchanges.

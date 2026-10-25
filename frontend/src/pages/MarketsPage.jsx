@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useTransition } from 'react'
+import { useState, useEffect, useCallback, useTransition, useRef } from 'react'
 import { Card, Badge, LoadingState, ErrorState, EmptyState } from '../components/common'
 import { PriceChart } from '../components/market/PriceChart'
 import { MarketIntelligenceCard } from '../components/market/MarketIntelligenceCard'
@@ -37,6 +37,8 @@ const TIMEFRAME_CONFIG = {
 export function MarketsPage({ externalSearch = '' }) {
   const { pageParams } = useNavigation()
   const [, startTransition] = useTransition()
+  const { pageParams } = useNavigation()
+  const autoOpenedSymbolRef = useRef(null)
   const [instruments, setInstruments] = useState(DEFAULT_INSTRUMENTS)
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [localSearch, setLocalSearch] = useState('')
@@ -223,14 +225,38 @@ export function MarketsPage({ externalSearch = '' }) {
     }
   }, [selectedInstrument, chartTimeframe])
 
-  const handleOpenDetail = (inst) => {
+  const handleOpenDetail = useCallback((inst) => {
     startTransition(() => {
       setSelectedInstrument(inst)
       setIsInWatchlist(false)
       setActionFeedback(null)
       setDetailTab('both')
     })
-  }
+  }, [])
+
+  // Auto-open detail modal if navigated with symbol param (e.g. from Dashboard or Search)
+  useEffect(() => {
+    const symbolParam = pageParams?.symbol
+    if (!symbolParam || autoOpenedSymbolRef.current === symbolParam) return
+
+    autoOpenedSymbolRef.current = symbolParam
+    const match = instruments.find((i) => i.symbol.toUpperCase() === symbolParam.toUpperCase())
+    if (match) {
+      handleOpenDetail(match)
+    } else {
+      handleOpenDetail({
+        symbol: symbolParam.toUpperCase(),
+        name: pageParams?.name || symbolParam.toUpperCase(),
+        assetType: pageParams?.assetType || 'equity',
+        exchange: pageParams?.exchange || 'N/A',
+        market: 'Global',
+        price: 0,
+        change: '0.00%',
+        isUp: true,
+        volume: 'N/A',
+      })
+    }
+  }, [pageParams?.symbol, pageParams?.name, pageParams?.assetType, pageParams?.exchange, instruments, handleOpenDetail])
 
   const handleCloseDetail = () => {
     setSelectedInstrument(null)
