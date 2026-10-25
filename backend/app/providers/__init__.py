@@ -5,6 +5,7 @@ from app.providers.base import (
     ProviderQuote,
     ProviderStatus,
 )
+from app.providers.cache import CachedMarketDataProvider
 from app.providers.mock import MockMarketDataProvider
 from app.providers.registry import ProviderRegistry, get_provider
 from app.providers.yahoo import YahooMarketDataProvider
@@ -21,6 +22,7 @@ __all__ = [
     "ProviderStatus",
     "MockMarketDataProvider",
     "YahooMarketDataProvider",
+    "CachedMarketDataProvider",
     "ProviderRegistry",
     "get_provider",
 ]

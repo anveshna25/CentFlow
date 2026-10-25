@@ -30,6 +30,10 @@ class Settings:
     app_port: int
     database_url: str
     market_data_provider: str = "mock"
+    market_data_cache_enabled: bool = True
+    quote_cache_ttl_seconds: int = 15
+    history_cache_ttl_seconds: int = 300
+    search_cache_ttl_seconds: int = 600
     cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
     api_v1_prefix: str = "/api/v1"
     debug: bool = False
@@ -52,6 +56,9 @@ def get_settings() -> Settings:
     cors_env = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
     cors_origins = tuple(origin.strip() for origin in cors_env.split(",") if origin.strip())
 
+    cache_enabled_env = os.getenv("MARKET_DATA_CACHE_ENABLED", "true").lower()
+    cache_enabled = cache_enabled_env in ("1", "true", "yes", "on")
+
     return Settings(
         app_name=os.getenv("APP_NAME", "CentFlow"),
         app_env=env,
@@ -59,6 +66,10 @@ def get_settings() -> Settings:
         app_port=int(os.getenv("APP_PORT", "8000")),
         database_url=os.getenv("DATABASE_URL", default_db_url),
         market_data_provider=os.getenv("MARKET_DATA_PROVIDER", "mock").lower(),
+        market_data_cache_enabled=cache_enabled,
+        quote_cache_ttl_seconds=int(os.getenv("QUOTE_CACHE_TTL_SECONDS", "15")),
+        history_cache_ttl_seconds=int(os.getenv("HISTORY_CACHE_TTL_SECONDS", "300")),
+        search_cache_ttl_seconds=int(os.getenv("SEARCH_CACHE_TTL_SECONDS", "600")),
         cors_origins=cors_origins,
         api_v1_prefix=os.getenv("API_V1_PREFIX", "/api/v1"),
         debug=(env == "development"),
