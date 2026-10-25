@@ -24,6 +24,10 @@ backend/.venv/
 # Logs
 *.log
 
+# Scratch and review temp files
+scratch/
+temp_pr_*.md
+
 # OS
 .DS_Store
 Thumbs.db
