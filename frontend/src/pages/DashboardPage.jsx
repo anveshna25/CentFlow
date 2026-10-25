@@ -1,9 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { StatWidget } from '../components/market/StatWidget'
-import { Card } from '../components/common/Card'
-import { Badge } from '../components/common/Badge'
-import { LoadingSpinner } from '../components/common/LoadingSpinner'
-import { ErrorBanner } from '../components/common/ErrorBanner'
+import { Card, Badge, LoadingState, ErrorState } from '../components/common'
 import { useNavigation } from '../state/NavigationContext'
 import { PAGES } from '../state/pages'
 import { getProviderStatus, getQuote } from '../api/marketData'
@@ -107,8 +104,9 @@ export function DashboardPage() {
     <div id="cf-dashboard-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-6)' }}>
       {/* Optional Error Alert */}
       {error && (
-        <ErrorBanner
+        <ErrorState
           error={error}
+          compact
           onRetry={loadDashboardData}
           id="cf-dashboard-error-banner"
         />
@@ -163,7 +161,11 @@ export function DashboardPage() {
 
       {/* Loading state indicator */}
       {isLoading && (
-        <LoadingSpinner message="Synchronizing live quotes with backend..." id="cf-dash-spinner" />
+        <LoadingState
+          title="Synchronizing live quotes with backend..."
+          size="sm"
+          id="cf-dash-spinner"
+        />
       )}
 
       {/* KPI Cards Grid */}
