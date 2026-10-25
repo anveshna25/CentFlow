@@ -3,8 +3,7 @@ import { Card } from '../components/common/Card'
 import { Badge } from '../components/common/Badge'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ErrorBanner } from '../components/common/ErrorBanner'
-import { PriceChart } from '../components/market/PriceChart'
-import { MarketIntelligenceCard } from '../components/market/MarketIntelligenceCard'
+import { AssetDetailModal } from '../components/market/AssetDetailModal'
 import { useNavigation } from '../state/NavigationContext'
 import {
   searchInstruments,
@@ -60,7 +59,6 @@ export function MarketsPage({ externalSearch = '' }) {
   const [intelligenceDetail, setIntelligenceDetail] = useState(null)
   const [returnsData, setReturnsData] = useState(null)
   const [isIntelligenceLoading, setIsIntelligenceLoading] = useState(false)
-  const [detailTab, setDetailTab] = useState('both') // 'chart' | 'intelligence' | 'both'
 
   const activeSearch = externalSearch || debouncedSearch
 
@@ -228,7 +226,6 @@ export function MarketsPage({ externalSearch = '' }) {
     startTransition(() => {
       setSelectedInstrument(inst)
       setActionFeedback(null)
-      setDetailTab('both')
     })
   }, [])
 
@@ -264,7 +261,6 @@ export function MarketsPage({ externalSearch = '' }) {
     setIntelligenceDetail(null)
     setReturnsData(null)
     setActionFeedback(null)
-    setDetailTab('both')
   }
 
   const handlePersistQuote = async () => {
@@ -491,299 +487,23 @@ export function MarketsPage({ externalSearch = '' }) {
         )}
       </Card>
 
-      {/* Interactive Chart & Instrument Detail Modal */}
+      {/* Central Asset Detail Experience Modal */}
       {selectedInstrument && (
-        <div
-          id="cf-chart-modal-backdrop"
-          onClick={handleCloseDetail}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(6px)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 'var(--cf-space-4)',
-          }}
-        >
-          <div
-            id="cf-chart-modal-content"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="cf-chart-modal-title"
-            style={{
-              background: 'var(--cf-bg-surface)',
-              border: '1px solid var(--cf-border)',
-              borderRadius: 'var(--cf-radius-xl)',
-              width: '100%',
-              maxWidth: '920px',
-              maxHeight: '92vh',
-              overflowY: 'auto',
-              boxShadow: 'var(--cf-shadow-glass)',
-              padding: 'var(--cf-space-6)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--cf-space-5)',
-            }}
-          >
-            {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <h2 id="cf-chart-modal-title" style={{ fontSize: '22px', margin: 0, letterSpacing: '-0.02em' }}>
-                    {selectedInstrument.symbol}
-                  </h2>
-                  <Badge variant="brand" size="sm">
-                    {selectedInstrument.assetType}
-                  </Badge>
-                  <span style={{ color: 'var(--cf-text-muted)', fontSize: '12px' }}>
-                    {selectedInstrument.exchange}
-                  </span>
-                </div>
-                <div style={{ color: 'var(--cf-text-secondary)', fontSize: '14px', marginTop: '2px' }}>
-                  {selectedInstrument.name}
-                </div>
-              </div>
-
-              {/* Close Button */}
-              <button
-                id="cf-chart-modal-close"
-                onClick={handleCloseDetail}
-                style={{
-                  background: 'var(--cf-bg-surface-elevated)',
-                  border: '1px solid var(--cf-border)',
-                  color: 'var(--cf-text-secondary)',
-                  borderRadius: 'var(--cf-radius-full)',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Quote Key Statistics Grid */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                gap: 'var(--cf-space-3)',
-                background: 'var(--cf-bg-base)',
-                padding: 'var(--cf-space-4)',
-                borderRadius: 'var(--cf-radius-lg)',
-                border: '1px solid var(--cf-border)',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>Price</div>
-                <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--cf-text-primary)' }}>
-                  ${Number(quoteDetail?.price ?? selectedInstrument.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>24h Change</div>
-                <div
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: 700,
-                    color: selectedInstrument.isUp ? 'var(--cf-bullish)' : 'var(--cf-bearish)',
-                  }}
-                >
-                  {selectedInstrument.change}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>Open</div>
-                <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cf-text-primary)' }}>
-                  {quoteDetail?.open ? `$${Number(quoteDetail.open).toFixed(2)}` : 'N/A'}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>24h High</div>
-                <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cf-bullish)' }}>
-                  {quoteDetail?.high ? `$${Number(quoteDetail.high).toFixed(2)}` : 'N/A'}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>24h Low</div>
-                <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cf-bearish)' }}>
-                  {quoteDetail?.low ? `$${Number(quoteDetail.low).toFixed(2)}` : 'N/A'}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>Volume</div>
-                <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cf-text-secondary)' }}>
-                  {selectedInstrument.volume}
-                </div>
-              </div>
-            </div>
-
-            {/* View Mode Navigation Tabs */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                borderBottom: '1px solid var(--cf-border)',
-                paddingBottom: '8px',
-              }}
-            >
-              <button
-                id="cf-tab-both"
-                onClick={() => setDetailTab('both')}
-                style={{
-                  background: detailTab === 'both' ? 'var(--cf-brand-primary)' : 'transparent',
-                  color: detailTab === 'both' ? '#ffffff' : 'var(--cf-text-secondary)',
-                  border: 'none',
-                  borderRadius: 'var(--cf-radius-sm)',
-                  padding: '6px 14px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all var(--cf-transition-fast)',
-                }}
-              >
-                Comprehensive (Chart & Intelligence)
-              </button>
-              <button
-                id="cf-tab-chart"
-                onClick={() => setDetailTab('chart')}
-                style={{
-                  background: detailTab === 'chart' ? 'var(--cf-brand-primary)' : 'transparent',
-                  color: detailTab === 'chart' ? '#ffffff' : 'var(--cf-text-secondary)',
-                  border: 'none',
-                  borderRadius: 'var(--cf-radius-sm)',
-                  padding: '6px 14px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all var(--cf-transition-fast)',
-                }}
-              >
-                Technical Chart & Overlays
-              </button>
-              <button
-                id="cf-tab-intelligence"
-                onClick={() => setDetailTab('intelligence')}
-                style={{
-                  background: detailTab === 'intelligence' ? 'var(--cf-brand-primary)' : 'transparent',
-                  color: detailTab === 'intelligence' ? '#ffffff' : 'var(--cf-text-secondary)',
-                  border: 'none',
-                  borderRadius: 'var(--cf-radius-sm)',
-                  padding: '6px 14px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all var(--cf-transition-fast)',
-                }}
-              >
-                Market Intelligence & Factor Signals
-              </button>
-            </div>
-
-            {/* Market Intelligence Summary Card (shown in 'both' or 'intelligence' view) */}
-            {(detailTab === 'both' || detailTab === 'intelligence') && (
-              <MarketIntelligenceCard
-                id={`modal-intelligence-${selectedInstrument.symbol}`}
-                symbol={selectedInstrument.symbol}
-                intelligence={intelligenceDetail}
-                returnsAnalysis={returnsData}
-                isLoading={isIntelligenceLoading}
-              />
-            )}
-
-            {/* Interactive Price Chart with Technical Indicators (shown in 'both' or 'chart' view) */}
-            {(detailTab === 'both' || detailTab === 'chart') && (
-              <PriceChart
-                id={`modal-chart-${selectedInstrument.symbol}`}
-                data={chartBars}
-                indicators={indicatorsData}
-                symbol={selectedInstrument.symbol}
-                currency="USD"
-                isLoading={isChartLoading}
-                timeframe={chartTimeframe}
-                onTimeframeChange={(tf) => setChartTimeframe(tf)}
-                height={340}
-              />
-            )}
-
-            {/* Ingestion & Persistence Actions */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 'var(--cf-space-3)',
-                borderTop: '1px solid var(--cf-border)',
-                paddingTop: 'var(--cf-space-3)',
-              }}
-            >
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <button
-                  id="btn-persist-quote"
-                  onClick={handlePersistQuote}
-                  style={{
-                    background: 'var(--cf-bg-surface-elevated)',
-                    border: '1px solid var(--cf-border)',
-                    borderRadius: 'var(--cf-radius-md)',
-                    color: 'var(--cf-text-primary)',
-                    padding: '8px 14px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'all var(--cf-transition-fast)',
-                  }}
-                >
-                  Persist Quote Observation
-                </button>
-                <button
-                  id="btn-backfill-bars"
-                  onClick={handleBackfillBars}
-                  style={{
-                    background: 'var(--cf-bg-surface-elevated)',
-                    border: '1px solid var(--cf-border)',
-                    borderRadius: 'var(--cf-radius-md)',
-                    color: 'var(--cf-brand-cyan)',
-                    padding: '8px 14px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'all var(--cf-transition-fast)',
-                  }}
-                >
-                  Backfill 30-Day History
-                </button>
-              </div>
-
-              {actionFeedback && (
-                <div
-                  id="cf-action-feedback"
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color:
-                      actionFeedback.type === 'success'
-                        ? 'var(--cf-bullish)'
-                        : actionFeedback.type === 'error'
-                        ? 'var(--cf-bearish)'
-                        : 'var(--cf-brand-cyan)',
-                  }}
-                >
-                  {actionFeedback.message}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <AssetDetailModal
+          instrument={selectedInstrument}
+          quote={quoteDetail}
+          chartBars={chartBars}
+          indicators={indicatorsData}
+          intelligence={intelligenceDetail}
+          returnsAnalysis={returnsData}
+          isLoading={isChartLoading || isIntelligenceLoading}
+          chartTimeframe={chartTimeframe}
+          onTimeframeChange={(tf) => setChartTimeframe(tf)}
+          onClose={handleCloseDetail}
+          onPersistQuote={handlePersistQuote}
+          onBackfillBars={handleBackfillBars}
+          actionFeedback={actionFeedback}
+        />
       )}
     </div>
   )

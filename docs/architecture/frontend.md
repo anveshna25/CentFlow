@@ -110,6 +110,20 @@ The [`MarketIntelligenceCard`](../../frontend/src/components/market/MarketIntell
 - **Factor Drivers & Rationales:** List of deterministic bullet explanations detailing the exact conditions driving the evaluation.
 - **Risk & Performance Distribution:** Historical period returns, annualized volatility, max drawdown, and recovery status.
 
+### 4.3 Central Asset Detail Experience (`AssetDetailModal.jsx`)
+
+The [`AssetDetailModal`](../../frontend/src/components/market/AssetDetailModal.jsx) acts as the central asset hub for inspecting individual instruments:
+- **Asset Identity Header:** Symbol, full asset name, exchange tag, asset classification badge, and settlement currency.
+- **Headline Pricing & 24h Visual Range Bar:** Large formatted real-time price, absolute and percentage change indicators, and an interactive 24h high/low gradient slider with an active price indicator.
+- **Key Statistics Matrix:** Open, High, Low, Previous Close, Volume, Market Classification, and Trading Status.
+- **Cross-Platform Actions:** Direct triggers for "+ Watchlist" (quick add feedback), "+ Position in Portfolio" (auto-navigates to portfolio view), "Persist Quote Observation", and "Backfill 30-Day History".
+- **Multi-Tab Exploration Modes:**
+  - `Comprehensive`: Synchronized display of both the `PriceChart` and `MarketIntelligenceCard`.
+  - `Technical Chart`: Dedicated technical chart with timeframe selector (`1D`, `1W`, `1M`, `1Y`, `ALL`) and technical indicator overlays.
+  - `Market Intelligence & Signals`: Factor scores, risk distribution, and deterministic drivers.
+  - `Instrument Profile & Provenance`: Exchange settlement rules, data provider provenance (`MOCK` / `YAHOO`), and cache architecture.
+- **Accessibility & Interaction:** Closes on backdrop click or `Escape` key, and automatically syncs when opened via URL hash parameters.
+
 ---
 
 ## 5. Navigation & State Management
@@ -147,12 +161,11 @@ function NavigationTrigger() {
    - Interactive filtering by asset category (`all`, `equity`, `crypto`, `etf`).
    - Debounced live text search filtering across symbols, company names, and exchanges.
    - Formatted market table with volumes, prices, and badges.
-   - **Interactive Modal Inspection:** Clicking any instrument opens a comprehensive drawer modal featuring:
-     - Header and key statistics grid (Price, 24h Change, Open, High, Low, Volume).
-     - **View Mode Navigation Tabs:** Toggle between `Comprehensive (Chart & Intelligence)`, `Technical Chart & Overlays`, and `Market Intelligence & Factor Signals`.
-     - Integrated `MarketIntelligenceCard` with score gauge and deterministic drivers.
-     - Interactive `PriceChart` with technical overlays and oscillator panels.
-     - Action triggers to persist live quote observations or backfill 30-day historical bars with automated recalculation refresh.
+   - **Central Asset Detail Experience:** Clicking any instrument opens the dedicated [`AssetDetailModal`](../../frontend/src/components/market/AssetDetailModal.jsx) featuring:
+     - Header, pricing headline, and 24h High/Low range slider bar.
+     - Key financial statistics grid (Open, High, Low, Previous Close, Volume, Classification).
+     - **View Mode Navigation Tabs:** Toggle between `Comprehensive (Chart & Intelligence)`, `Technical Chart & Overlays`, `Market Intelligence & Factor Signals`, and `Instrument Profile & Provenance`.
+     - Direct platform action buttons: "+ Watchlist", "+ Position in Portfolio", "Persist Quote Observation", and "Backfill 30-Day History".
 3. **Watchlists (`WatchlistsPage.jsx`):**
    - User-defined instrument groupings (Mega-Cap Tech, Decentralized L1s, Macro Hedges).
    - Tracked symbol chips and collective daily momentum.
