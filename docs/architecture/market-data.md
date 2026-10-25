@@ -44,12 +44,15 @@ To maintain architectural integrity, CentFlow enforces an **Adapter-based Provid
 
 ```text
 backend/app/
+├── core/
+│   └── cache.py              # AsyncMemoryCache with TTL & single-flight
 ├── providers/
 │   ├── __init__.py           # Package exports & default registration
 │   ├── base.py               # BaseMarketDataProvider ABC & normalized DTOs
 │   ├── registry.py           # ProviderRegistry & get_provider helper
 │   ├── mock.py               # Deterministic MockMarketDataProvider
-│   └── yahoo.py              # Live YahooMarketDataProvider (HTTP adapter)
+│   ├── yahoo.py              # Live YahooMarketDataProvider (HTTP adapter)
+│   └── cache.py              # CachedMarketDataProvider proxy decorator
 │
 └── services/
     ├── __init__.py           # Exports MarketDataService
@@ -152,25 +155,51 @@ Defined in [`backend/app/providers/yahoo.py`](../../backend/app/providers/yahoo.
 
 ---
 
-## 8. Service Layer (`MarketDataService`)
+## 8. In-Memory Caching & Rate-Limiting Layer
 
-The [`MarketDataService`](../../backend/app/services/market_data.py) encapsulates business operations and delegates to the configured provider:
+To prevent exceeding upstream provider rate limits and shield the platform from duplicate concurrent queries, CentFlow incorporates an asynchronous caching and single-flight request coalescing architecture:
+
+### 8.1 `AsyncMemoryCache` ([`backend/app/core/cache.py`](../../backend/app/core/cache.py))
+- **TTL Expiration:** Each cache entry maintains an absolute expiration timestamp (`now + ttl_seconds`), automatically evicted on read or via background cleanup.
+- **Single-Flight Request Coalescing:** When multiple concurrent coroutines request the same uncached key simultaneously, only one leader execution triggers the remote factory call while follower tasks await the shared future.
+- **Capacity Management:** High-water mark capping (`max_capacity=1000`) with automatic oldest/expired item eviction.
+- **Metrics Telemetry:** Tracks `hits`, `misses`, `evictions`, and `coalesced` requests.
+
+### 8.2 `CachedMarketDataProvider` ([`backend/app/providers/cache.py`](../../backend/app/providers/cache.py))
+Transparent proxy decorator implementing `BaseMarketDataProvider`:
+- **Quote Caching:** Keyed by `quote:{SYMBOL}`, default TTL: 15 seconds.
+- **Historical Bars Caching:** Keyed by `history:{SYMBOL}:{START}:{END}:{INTERVAL}`, default TTL: 300 seconds (5 minutes).
+- **Search Caching:** Keyed by `search:{QUERY}`, default TTL: 600 seconds (10 minutes).
+- **Diagnostic Bypass:** `get_status()` bypasses cache to always report live provider connectivity.
+
+### 8.3 Configuration (`backend/app/core/config.py`)
+- `MARKET_DATA_CACHE_ENABLED`: Master toggle (default: `true`).
+- `QUOTE_CACHE_TTL_SECONDS`: Quote cache TTL (default: `15`).
+- `HISTORY_CACHE_TTL_SECONDS`: History bars cache TTL (default: `300`).
+- `SEARCH_CACHE_TTL_SECONDS`: Search results cache TTL (default: `600`).
+
+---
+
+## 9. Service Layer (`MarketDataService`)
+
+The [`MarketDataService`](../../backend/app/services/market_data.py) encapsulates business operations, automatically wrapping the active provider with `CachedMarketDataProvider` when caching is enabled:
 
 ```python
 service = MarketDataService()
 quote = await service.get_quote("AAPL")
 history = await service.get_historical_bars("AAPL", start_date, end_date)
 instruments = await service.search_instruments("Apple")
+cache_stats = service.get_cache_stats()  # {"hits": 12, "misses": 3, "coalesced": 5, ...}
 ```
 
 It also offers translation utilities to map normalized provider models into domain entities (e.g. `to_domain_price(quote, instrument)`).
 
 ---
 
-## 9. Remaining Phase 3 Roadmap
+## 10. Remaining Phase 3 Roadmap
 
 Phase 3 (Market Data Engine & Ingestion) progresses through:
 1. **Live Adapter:** `YahooMarketDataProvider` integrated with `ProviderRegistry` and `Settings`. (Completed)
-2. **In-Memory Caching & Rate-Limiting:** Transparent TTL caching for quotes and bars to prevent exceeding upstream API rate limits.
+2. **In-Memory Caching & Rate-Limiting:** Transparent TTL caching for quotes, bars, and search with single-flight request coalescing. (Completed)
 3. **Data Persistence:** Ingestion service writing normalized quotes and OHLCV bars into `prices` and `instruments` tables via `PriceRepository`.
 4. **Interactive Frontend Visualizations:** Time-series candlestick/line charts, interval toggles, and live search autocomplete.
