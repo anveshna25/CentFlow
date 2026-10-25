@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback, useTransition, useRef } from 'react'
-import { Card } from '../components/common/Card'
-import { Badge } from '../components/common/Badge'
-import { LoadingSpinner } from '../components/common/LoadingSpinner'
-import { ErrorBanner } from '../components/common/ErrorBanner'
+import { Card, Badge, LoadingState, ErrorState, EmptyState } from '../components/common'
 import { AssetDetailModal } from '../components/market/AssetDetailModal'
 import { useNavigation } from '../state/NavigationContext'
 import {
@@ -326,8 +323,9 @@ export function MarketsPage({ externalSearch = '' }) {
     <div id="cf-markets-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-6)' }}>
       {/* Optional Error Alert */}
       {error && (
-        <ErrorBanner
+        <ErrorState
           error={error}
+          compact
           onRetry={loadInstruments}
           id="cf-markets-error-banner"
         />
@@ -370,7 +368,12 @@ export function MarketsPage({ externalSearch = '' }) {
 
       {/* Loading Indicator */}
       {isLoading && (
-        <LoadingSpinner message="Retrieving instruments and quotes from backend..." id="cf-markets-spinner" />
+        <LoadingState
+          title="Retrieving market instruments..."
+          description="Synchronizing quotes and metadata from the backend data feed"
+          size="sm"
+          id="cf-markets-spinner"
+        />
       )}
 
       {/* Main Table Card */}
@@ -401,9 +404,28 @@ export function MarketsPage({ externalSearch = '' }) {
         }
       >
         {filteredInstruments.length === 0 ? (
-          <div style={{ padding: 'var(--cf-space-8)', textAlign: 'center', color: 'var(--cf-text-muted)' }}>
-            No instruments match the current filter or search criteria.
-          </div>
+          <EmptyState
+            id="cf-markets-empty-state"
+            icon="search"
+            title="No Matching Instruments"
+            description={
+              localSearch || selectedCategory !== 'all'
+                ? `No instruments matched "${localSearch}" in category "${selectedCategory}".`
+                : 'No market instruments are currently available.'
+            }
+            action={
+              localSearch || selectedCategory !== 'all'
+                ? {
+                    label: 'Reset Filters',
+                    onClick: () => {
+                      setLocalSearch('')
+                      setSelectedCategory('all')
+                    },
+                    id: 'cf-reset-filters-btn',
+                  }
+                : null
+            }
+          />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
