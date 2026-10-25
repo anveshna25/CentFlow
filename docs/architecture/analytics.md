@@ -234,11 +234,45 @@ A calibrated composite index synthesizing:
 
 ---
 
-## 8. Next Steps in Phase 4
+## 8. Analytics API Specification (`/api/v1/analytics`)
+
+Analytics endpoints are exposed under the `/api/v1/analytics` prefix conforming to CentFlow's `ResponseEnvelope[T]` format:
+
+### 1. Market Intelligence Summary
+```http
+GET /api/v1/analytics/summary/{symbol}?interval=1d&lookback_days=365
+```
+Returns synthesized trend posture, momentum state, volatility regime, composite score (0-100), plain-English verdict, and deterministic rationales.
+
+### 2. Full Technical Indicators Time Series
+```http
+GET /api/v1/analytics/indicators/{symbol}?interval=1d&lookback_days=365&include_rsi=true&include_macd=true&include_bollinger=true
+```
+Returns aligned chronological datasets containing:
+- Aligned timestamps and closing prices
+- Configured SMAs (`sma_20`, `sma_50`, `sma_200`)
+- Configured EMAs (`ema_12`, `ema_26`)
+- RSI (14)
+- MACD components (`macd_line`, `signal_line`, `histogram`)
+- Bollinger Bands components (`upper_band`, `middle_band`, `lower_band`, `bandwidth`, `%B`)
+
+### 3. Returns and Risk Distribution
+```http
+GET /api/v1/analytics/returns/{symbol}?interval=1d&lookback_days=365&annualize_factor=252
+```
+Returns performance analysis including:
+- Period return (start/end prices, absolute change, percentage change, log return)
+- Volatility metrics (sample std dev, annualized volatility)
+- Maximum drawdown (peak/trough prices and indices, max decline amount/pct, recovery status)
+- Price series summary (mean, median, min, max, total observations)
+
+---
+
+## 9. Next Steps in Phase 4
 
 Following dependency order:
 1. **Issue #38 (Complete):** Analytics domain and core price-based calculations.
-2. **Issue #39 (Complete / Under Review in PR #44):** Technical indicators engine (SMA, EMA, RSI, MACD, Bollinger Bands).
-3. **Issue #40 (Complete / Ready for PR):** Analytics service layer and market intelligence metrics (Trend, Momentum, Volatility Regime).
-4. **Issue #41:** Analytics API endpoints and request/response schemas.
+2. **Issue #39 (Complete):** Technical indicators engine (SMA, EMA, RSI, MACD, Bollinger Bands).
+3. **Issue #40 (Complete):** Analytics service layer and market intelligence metrics (Trend, Momentum, Volatility Regime).
+4. **Issue #41 (Complete / Ready for PR):** Analytics API endpoints and request/response schemas.
 5. **Issue #42:** Product integration into frontend dashboards and interactive charts.
