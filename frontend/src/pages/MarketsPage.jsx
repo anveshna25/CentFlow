@@ -4,6 +4,7 @@ import { Badge } from '../components/common/Badge'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ErrorBanner } from '../components/common/ErrorBanner'
 import { PriceChart } from '../components/market/PriceChart'
+import { MarketIntelligenceCard } from '../components/market/MarketIntelligenceCard'
 import {
   searchInstruments,
   getQuote,
@@ -11,6 +12,11 @@ import {
   ingestQuote,
   backfillHistoricalBars,
 } from '../api/marketData'
+import {
+  getAnalyticsSummary,
+  getIndicatorSeries,
+  getReturnsAnalysis,
+} from '../api/analytics'
 
 const DEFAULT_INSTRUMENTS = [
   { symbol: 'AAPL', name: 'Apple Inc.', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 185.50, change: '+0.87%', isUp: true, volume: '52.4M' },
@@ -45,6 +51,13 @@ export function MarketsPage({ externalSearch = '' }) {
   const [chartTimeframe, setChartTimeframe] = useState('1M')
   const [isChartLoading, setIsChartLoading] = useState(false)
   const [actionFeedback, setActionFeedback] = useState(null)
+
+  // Analytics & Quantitative Intelligence State
+  const [indicatorsData, setIndicatorsData] = useState(null)
+  const [intelligenceDetail, setIntelligenceDetail] = useState(null)
+  const [returnsData, setReturnsData] = useState(null)
+  const [isIntelligenceLoading, setIsIntelligenceLoading] = useState(false)
+  const [detailTab, setDetailTab] = useState('both') // 'chart' | 'intelligence' | 'both'
 
   const activeSearch = externalSearch || debouncedSearch
 
@@ -163,36 +176,46 @@ export function MarketsPage({ externalSearch = '' }) {
     }
   }, [activeSearch])
 
-  // Load historical bars and quote details when selecting an instrument
+  // Load historical bars, indicators, quote, and market intelligence when selecting an instrument
   useEffect(() => {
     if (!selectedInstrument) return
     let isCancelled = false
 
-    const fetchChartData = async () => {
+    const fetchDetailData = async () => {
       setIsChartLoading(true)
+      setIsIntelligenceLoading(true)
       const config = TIMEFRAME_CONFIG[chartTimeframe] || TIMEFRAME_CONFIG['1M']
+      const lookbackDays = config.days === 1 ? 30 : config.days
+
       try {
-        const [barsRes, quoteRes] = await Promise.all([
+        const [barsRes, quoteRes, indicatorsRes, summaryRes, returnsRes] = await Promise.all([
           getHistoricalBars(selectedInstrument.symbol, config.days, config.interval).catch(() => null),
           getQuote(selectedInstrument.symbol).catch(() => null),
+          getIndicatorSeries(selectedInstrument.symbol, lookbackDays, config.interval, {
+            includeRsi: true,
+            includeMacd: true,
+            includeBollinger: true,
+          }).catch(() => null),
+          getAnalyticsSummary(selectedInstrument.symbol, lookbackDays, config.interval).catch(() => null),
+          getReturnsAnalysis(selectedInstrument.symbol, lookbackDays, config.interval, 252).catch(() => null),
         ])
 
         if (!isCancelled) {
-          if (barsRes?.data) {
-            setChartBars(barsRes.data)
-          }
-          if (quoteRes?.data) {
-            setQuoteDetail(quoteRes.data)
-          }
+          if (barsRes?.data) setChartBars(barsRes.data)
+          if (quoteRes?.data) setQuoteDetail(quoteRes.data)
+          if (indicatorsRes?.data) setIndicatorsData(indicatorsRes.data)
+          if (summaryRes?.data) setIntelligenceDetail(summaryRes.data)
+          if (returnsRes?.data) setReturnsData(returnsRes.data)
         }
       } finally {
         if (!isCancelled) {
           setIsChartLoading(false)
+          setIsIntelligenceLoading(false)
         }
       }
     }
 
-    fetchChartData()
+    fetchDetailData()
     return () => {
       isCancelled = true
     }
@@ -202,6 +225,7 @@ export function MarketsPage({ externalSearch = '' }) {
     startTransition(() => {
       setSelectedInstrument(inst)
       setActionFeedback(null)
+      setDetailTab('both')
     })
   }
 
@@ -209,7 +233,11 @@ export function MarketsPage({ externalSearch = '' }) {
     setSelectedInstrument(null)
     setQuoteDetail(null)
     setChartBars([])
+    setIndicatorsData(null)
+    setIntelligenceDetail(null)
+    setReturnsData(null)
     setActionFeedback(null)
+    setDetailTab('both')
   }
 
   const handlePersistQuote = async () => {
@@ -233,8 +261,26 @@ export function MarketsPage({ externalSearch = '' }) {
       if (res?.data) {
         setActionFeedback({
           type: 'success',
-          message: `Backfilled ${res.data.bars_ingested} bars for ${selectedInstrument.symbol}.`,
+          message: `Backfilled ${res.data.bars_ingested} bars for ${selectedInstrument.symbol}. Refreshing calculations...`,
         })
+
+        // Refresh analytics and chart data
+        const config = TIMEFRAME_CONFIG[chartTimeframe] || TIMEFRAME_CONFIG['1M']
+        const lookbackDays = config.days === 1 ? 30 : config.days
+        const [barsRes, indicatorsRes, summaryRes, returnsRes] = await Promise.all([
+          getHistoricalBars(selectedInstrument.symbol, config.days, config.interval).catch(() => null),
+          getIndicatorSeries(selectedInstrument.symbol, lookbackDays, config.interval, {
+            includeRsi: true,
+            includeMacd: true,
+            includeBollinger: true,
+          }).catch(() => null),
+          getAnalyticsSummary(selectedInstrument.symbol, lookbackDays, config.interval).catch(() => null),
+          getReturnsAnalysis(selectedInstrument.symbol, lookbackDays, config.interval, 252).catch(() => null),
+        ])
+        if (barsRes?.data) setChartBars(barsRes.data)
+        if (indicatorsRes?.data) setIndicatorsData(indicatorsRes.data)
+        if (summaryRes?.data) setIntelligenceDetail(summaryRes.data)
+        if (returnsRes?.data) setReturnsData(returnsRes.data)
       }
     } catch {
       setActionFeedback({ type: 'error', message: 'Failed to backfill bars.' })
@@ -553,17 +599,94 @@ export function MarketsPage({ externalSearch = '' }) {
               </div>
             </div>
 
-            {/* Interactive Price Chart */}
-            <PriceChart
-              id={`modal-chart-${selectedInstrument.symbol}`}
-              data={chartBars}
-              symbol={selectedInstrument.symbol}
-              currency="USD"
-              isLoading={isChartLoading}
-              timeframe={chartTimeframe}
-              onTimeframeChange={(tf) => setChartTimeframe(tf)}
-              height={340}
-            />
+            {/* View Mode Navigation Tabs */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                borderBottom: '1px solid var(--cf-border)',
+                paddingBottom: '8px',
+              }}
+            >
+              <button
+                id="cf-tab-both"
+                onClick={() => setDetailTab('both')}
+                style={{
+                  background: detailTab === 'both' ? 'var(--cf-brand-primary)' : 'transparent',
+                  color: detailTab === 'both' ? '#ffffff' : 'var(--cf-text-secondary)',
+                  border: 'none',
+                  borderRadius: 'var(--cf-radius-sm)',
+                  padding: '6px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all var(--cf-transition-fast)',
+                }}
+              >
+                Comprehensive (Chart & Intelligence)
+              </button>
+              <button
+                id="cf-tab-chart"
+                onClick={() => setDetailTab('chart')}
+                style={{
+                  background: detailTab === 'chart' ? 'var(--cf-brand-primary)' : 'transparent',
+                  color: detailTab === 'chart' ? '#ffffff' : 'var(--cf-text-secondary)',
+                  border: 'none',
+                  borderRadius: 'var(--cf-radius-sm)',
+                  padding: '6px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all var(--cf-transition-fast)',
+                }}
+              >
+                Technical Chart & Overlays
+              </button>
+              <button
+                id="cf-tab-intelligence"
+                onClick={() => setDetailTab('intelligence')}
+                style={{
+                  background: detailTab === 'intelligence' ? 'var(--cf-brand-primary)' : 'transparent',
+                  color: detailTab === 'intelligence' ? '#ffffff' : 'var(--cf-text-secondary)',
+                  border: 'none',
+                  borderRadius: 'var(--cf-radius-sm)',
+                  padding: '6px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all var(--cf-transition-fast)',
+                }}
+              >
+                Market Intelligence & Factor Signals
+              </button>
+            </div>
+
+            {/* Market Intelligence Summary Card (shown in 'both' or 'intelligence' view) */}
+            {(detailTab === 'both' || detailTab === 'intelligence') && (
+              <MarketIntelligenceCard
+                id={`modal-intelligence-${selectedInstrument.symbol}`}
+                symbol={selectedInstrument.symbol}
+                intelligence={intelligenceDetail}
+                returnsAnalysis={returnsData}
+                isLoading={isIntelligenceLoading}
+              />
+            )}
+
+            {/* Interactive Price Chart with Technical Indicators (shown in 'both' or 'chart' view) */}
+            {(detailTab === 'both' || detailTab === 'chart') && (
+              <PriceChart
+                id={`modal-chart-${selectedInstrument.symbol}`}
+                data={chartBars}
+                indicators={indicatorsData}
+                symbol={selectedInstrument.symbol}
+                currency="USD"
+                isLoading={isChartLoading}
+                timeframe={chartTimeframe}
+                onTimeframeChange={(tf) => setChartTimeframe(tf)}
+                height={340}
+              />
+            )}
 
             {/* Ingestion & Persistence Actions */}
             <div

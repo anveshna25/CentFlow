@@ -1,3 +1,14 @@
+from app.api.schemas.analytics import (
+    BollingerBandsComponentSchema,
+    DrawdownMetricSchema,
+    IndicatorSeriesResponseSchema,
+    MACDComponentSchema,
+    MarketIntelligenceResponseSchema,
+    PeriodReturnSchema,
+    PriceSummarySchema,
+    ReturnsAnalysisResponseSchema,
+    VolatilityMetricsSchema,
+)
 from app.api.schemas.base import (
     BaseSchema,
     ErrorDetail,
@@ -6,6 +17,17 @@ from app.api.schemas.base import (
     PaginatedResponse,
     PaginationMeta,
     ResponseEnvelope,
+)
+from app.api.schemas.market_data import (
+    BackfillRequestSchema,
+    BackfillResponseSchema,
+    BarResponseSchema,
+    InstrumentResponseSchema,
+    PersistedPriceSchema,
+    ProviderStatusSchema,
+    QuoteResponseSchema,
+    SyncCatalogRequestSchema,
+    SyncCatalogResponseSchema,
 )
 
 __all__ = [
@@ -16,4 +38,22 @@ __all__ = [
     "PaginatedResponse",
     "PaginationMeta",
     "ResponseEnvelope",
+    "QuoteResponseSchema",
+    "BarResponseSchema",
+    "InstrumentResponseSchema",
+    "ProviderStatusSchema",
+    "PersistedPriceSchema",
+    "BackfillRequestSchema",
+    "BackfillResponseSchema",
+    "SyncCatalogRequestSchema",
+    "SyncCatalogResponseSchema",
+    "PriceSummarySchema",
+    "PeriodReturnSchema",
+    "VolatilityMetricsSchema",
+    "DrawdownMetricSchema",
+    "ReturnsAnalysisResponseSchema",
+    "MACDComponentSchema",
+    "BollingerBandsComponentSchema",
+    "IndicatorSeriesResponseSchema",
+    "MarketIntelligenceResponseSchema",
 ]
