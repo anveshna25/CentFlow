@@ -37,7 +37,6 @@ const TIMEFRAME_CONFIG = {
 export function MarketsPage({ externalSearch = '' }) {
   const { pageParams } = useNavigation()
   const [, startTransition] = useTransition()
-  const { pageParams } = useNavigation()
   const autoOpenedSymbolRef = useRef(null)
   const [instruments, setInstruments] = useState(DEFAULT_INSTRUMENTS)
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -303,27 +302,6 @@ export function MarketsPage({ externalSearch = '' }) {
     }
   }, [selectedInstrument, watchlistId])
 
-  // Open asset if navigated with pageParams.symbol
-  useEffect(() => {
-    if (pageParams?.symbol) {
-      const sym = pageParams.symbol.toUpperCase()
-      const existing = instruments.find((i) => i.symbol.toUpperCase() === sym)
-      if (existing) {
-        handleOpenDetail(existing)
-      } else {
-        handleOpenDetail({
-          symbol: sym,
-          name: sym,
-          assetType: 'equity',
-          exchange: 'Market',
-          price: 0,
-          change: '0.00%',
-          isUp: true,
-          volume: 'N/A',
-        })
-      }
-    }
-  }, [pageParams?.symbol, instruments])
 
   const handleToggleWatchlist = async () => {
     if (!selectedInstrument || !watchlistId) return
