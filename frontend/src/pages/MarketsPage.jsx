@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useTransition } from 'react'
+import { useState, useEffect, useCallback, useTransition, useRef } from 'react'
 import { Card } from '../components/common/Card'
 import { Badge } from '../components/common/Badge'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ErrorBanner } from '../components/common/ErrorBanner'
 import { PriceChart } from '../components/market/PriceChart'
 import { MarketIntelligenceCard } from '../components/market/MarketIntelligenceCard'
+import { useNavigation } from '../state/NavigationContext'
 import {
   searchInstruments,
   getQuote,
@@ -37,6 +38,8 @@ const TIMEFRAME_CONFIG = {
 
 export function MarketsPage({ externalSearch = '' }) {
   const [, startTransition] = useTransition()
+  const { pageParams } = useNavigation()
+  const autoOpenedSymbolRef = useRef(null)
   const [instruments, setInstruments] = useState(DEFAULT_INSTRUMENTS)
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [localSearch, setLocalSearch] = useState('')
@@ -221,13 +224,37 @@ export function MarketsPage({ externalSearch = '' }) {
     }
   }, [selectedInstrument, chartTimeframe])
 
-  const handleOpenDetail = (inst) => {
+  const handleOpenDetail = useCallback((inst) => {
     startTransition(() => {
       setSelectedInstrument(inst)
       setActionFeedback(null)
       setDetailTab('both')
     })
-  }
+  }, [])
+
+  // Auto-open detail modal if navigated with symbol param (e.g. from Dashboard or Search)
+  useEffect(() => {
+    const symbolParam = pageParams?.symbol
+    if (!symbolParam || autoOpenedSymbolRef.current === symbolParam) return
+
+    autoOpenedSymbolRef.current = symbolParam
+    const match = instruments.find((i) => i.symbol.toUpperCase() === symbolParam.toUpperCase())
+    if (match) {
+      handleOpenDetail(match)
+    } else {
+      handleOpenDetail({
+        symbol: symbolParam.toUpperCase(),
+        name: pageParams?.name || symbolParam.toUpperCase(),
+        assetType: pageParams?.assetType || 'equity',
+        exchange: pageParams?.exchange || 'N/A',
+        market: 'Global',
+        price: 0,
+        change: '0.00%',
+        isUp: true,
+        volume: 'N/A',
+      })
+    }
+  }, [pageParams?.symbol, pageParams?.name, pageParams?.assetType, pageParams?.exchange, instruments, handleOpenDetail])
 
   const handleCloseDetail = () => {
     setSelectedInstrument(null)
