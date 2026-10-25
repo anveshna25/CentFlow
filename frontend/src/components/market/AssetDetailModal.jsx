@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react'
 import { Badge } from '../common/Badge'
 import { PriceChart } from './PriceChart'
 import { MarketIntelligenceCard } from './MarketIntelligenceCard'
-import { TechnicalPostureBadge } from '../analytics'
-import { getAnalyticsSummary, getReturnsAnalysis } from '../../api/analytics'
 import { useNavigation } from '../../state/NavigationContext'
 import { PAGES } from '../../state/pages'
 
@@ -31,37 +29,12 @@ export function AssetDetailModal({
   onPersistQuote,
   onBackfillBars,
   actionFeedback = null,
+  isInWatchlist = false,
+  onToggleWatchlist,
 }) {
   const { navigate } = useNavigation()
   const [activeTab, setActiveTab] = useState('comprehensive') // 'comprehensive' | 'chart' | 'intelligence' | 'profile'
   const [watchlistAdded, setWatchlistAdded] = useState(false)
-  const [fetchedIntel, setFetchedIntel] = useState(null)
-  const [fetchedReturns, setFetchedReturns] = useState(null)
-
-  // On-demand fetch if analytics were not preloaded
-  useEffect(() => {
-    let isCancelled = false
-    if (!intelligence && instrument?.symbol) {
-      getAnalyticsSummary(instrument.symbol, 365, '1d')
-        .then((res) => {
-          if (!isCancelled && res?.data) setFetchedIntel(res.data)
-        })
-        .catch(() => null)
-    }
-    if (!returnsAnalysis && instrument?.symbol) {
-      getReturnsAnalysis(instrument.symbol, 365, '1d', 252)
-        .then((res) => {
-          if (!isCancelled && res?.data) setFetchedReturns(res.data)
-        })
-        .catch(() => null)
-    }
-    return () => {
-      isCancelled = true
-    }
-  }, [instrument?.symbol, intelligence, returnsAnalysis])
-
-  const resolvedIntel = intelligence || fetchedIntel
-  const resolvedReturns = returnsAnalysis || fetchedReturns
 
   // Keyboard Escape listener to close modal
   useEffect(() => {
@@ -91,8 +64,12 @@ export function AssetDetailModal({
   const isUp = instrument.isUp ?? (!String(changeText).startsWith('-'))
 
   const handleAddToWatchlist = () => {
-    setWatchlistAdded(true)
-    setTimeout(() => setWatchlistAdded(false), 3000)
+    if (onToggleWatchlist) {
+      onToggleWatchlist()
+    } else {
+      setWatchlistAdded(true)
+      setTimeout(() => setWatchlistAdded(false), 3000)
+    }
   }
 
   const handleAddToPortfolio = () => {
@@ -165,9 +142,9 @@ export function AssetDetailModal({
               id="cf-btn-add-watchlist"
               onClick={handleAddToWatchlist}
               style={{
-                background: watchlistAdded ? 'var(--cf-bullish-bg)' : 'var(--cf-bg-surface-elevated)',
-                color: watchlistAdded ? 'var(--cf-bullish)' : 'var(--cf-text-primary)',
-                border: `1px solid ${watchlistAdded ? 'var(--cf-bullish-border)' : 'var(--cf-border)'}`,
+                background: isInWatchlist || watchlistAdded ? 'var(--cf-bullish-bg)' : 'var(--cf-bg-surface-elevated)',
+                color: isInWatchlist || watchlistAdded ? 'var(--cf-bullish)' : 'var(--cf-text-primary)',
+                border: `1px solid ${isInWatchlist || watchlistAdded ? 'var(--cf-bullish-border)' : 'var(--cf-border)'}`,
                 borderRadius: 'var(--cf-radius-md)',
                 padding: '7px 12px',
                 fontSize: '12px',
@@ -179,7 +156,7 @@ export function AssetDetailModal({
                 transition: 'all var(--cf-transition-fast)',
               }}
             >
-              <span>{watchlistAdded ? '✓ Added to Watchlist' : '+ Watchlist'}</span>
+              <span>{isInWatchlist ? '★ In Watchlist' : watchlistAdded ? '✓ Added to Watchlist' : '+ Watchlist'}</span>
             </button>
 
             <button
@@ -240,7 +217,7 @@ export function AssetDetailModal({
             gap: 'var(--cf-space-3)',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--cf-space-2)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 'var(--cf-space-2)' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
               <span style={{ fontSize: '28px', fontWeight: 700, color: 'var(--cf-text-primary)', letterSpacing: '-0.02em' }}>
                 ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -259,19 +236,11 @@ export function AssetDetailModal({
               </span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <TechnicalPostureBadge
-                posture={resolvedIntel}
-                showScore
-                size="md"
-                id="cf-asset-detail-posture-badge"
-              />
-              {prevClose && (
-                <div style={{ fontSize: '12px', color: 'var(--cf-text-muted)' }}>
-                  Prev Close: ${prevClose.toFixed(2)}
-                </div>
-              )}
-            </div>
+            {prevClose && (
+              <div style={{ fontSize: '12px', color: 'var(--cf-text-muted)' }}>
+                Prev Close: ${prevClose.toFixed(2)}
+              </div>
+            )}
           </div>
 
           {/* Visual 24h High/Low Slider Gauge */}
@@ -319,47 +288,6 @@ export function AssetDetailModal({
               />
             </div>
           </div>
-
-          {/* Quantitative Analytics Posture Strip */}
-          {resolvedIntel && (
-            <div
-              id="cf-detail-factor-strip"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                gap: 'var(--cf-space-2)',
-                marginTop: 'var(--cf-space-1)',
-                borderTop: '1px solid var(--cf-border)',
-                paddingTop: 'var(--cf-space-2)',
-                fontSize: '11px',
-              }}
-            >
-              <div>
-                <span style={{ color: 'var(--cf-text-muted)' }}>MOMENTUM: </span>
-                <span style={{ color: 'var(--cf-text-primary)', fontWeight: 600 }}>
-                  {resolvedIntel.momentum_state?.toUpperCase() || 'NEUTRAL'}
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--cf-text-muted)' }}>VOLATILITY: </span>
-                <span style={{ color: 'var(--cf-text-primary)', fontWeight: 600 }}>
-                  {resolvedIntel.volatility_regime?.toUpperCase() || 'NORMAL'}
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--cf-text-muted)' }}>FACTOR SCORE: </span>
-                <span style={{ color: 'var(--cf-brand-cyan)', fontWeight: 700 }}>
-                  {resolvedIntel.composite_score ?? 50} / 100
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--cf-text-muted)' }}>VERDICT: </span>
-                <span style={{ color: 'var(--cf-text-secondary)', fontWeight: 600 }}>
-                  {resolvedIntel.summary_verdict || 'Balanced'}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* 3. Key Financial Statistics Grid */}
@@ -465,8 +393,8 @@ export function AssetDetailModal({
           <MarketIntelligenceCard
             id={`detail-intelligence-${instrument.symbol}`}
             symbol={instrument.symbol}
-            intelligence={resolvedIntel}
-            returnsAnalysis={resolvedReturns}
+            intelligence={intelligence}
+            returnsAnalysis={returnsAnalysis}
             isLoading={isLoading}
           />
         )}
