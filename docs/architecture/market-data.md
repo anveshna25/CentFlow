@@ -48,7 +48,8 @@ backend/app/
 │   ├── __init__.py           # Package exports & default registration
 │   ├── base.py               # BaseMarketDataProvider ABC & normalized DTOs
 │   ├── registry.py           # ProviderRegistry & get_provider helper
-│   └── mock.py               # Reference MockMarketDataProvider
+│   ├── mock.py               # Deterministic MockMarketDataProvider
+│   └── yahoo.py              # Live YahooMarketDataProvider (HTTP adapter)
 │
 └── services/
     ├── __init__.py           # Exports MarketDataService
@@ -126,8 +127,9 @@ class BaseMarketDataProvider(ABC):
 Providers are registered in [`backend/app/providers/registry.py`](../../backend/app/providers/registry.py):
 
 ```python
-# Registering a provider
+# Registered providers
 ProviderRegistry.register("mock", MockMarketDataProvider)
+ProviderRegistry.register("yahoo", YahooMarketDataProvider)
 
 # Resolving active provider based on environment setting
 provider = get_provider()
@@ -139,7 +141,18 @@ provider = get_provider()
 
 ---
 
-## 7. Service Layer (`MarketDataService`)
+## 7. Live Adapter Implementation (`YahooMarketDataProvider`)
+
+Defined in [`backend/app/providers/yahoo.py`](../../backend/app/providers/yahoo.py):
+- **HTTP Client:** Uses `httpx.AsyncClient` with custom user agent and timeout settings. Supports external client injection for deterministic offline unit testing.
+- **Quote Extraction:** Parses `chart.result[0].meta` and indicators, normalizing into `ProviderQuote` with absolute and percentage change calculations.
+- **Historical Bars:** Queries epoch-based intervals (`period1`, `period2`), skipping null/holiday entries, normalizing into `ProviderBar` candles.
+- **Search & Identification:** Queries Yahoo search endpoint, normalizing ticker, company name, exchange venue, and asset class (`equity`, `crypto`, `etf`, `forex`, `index`).
+- **Error Mapping:** Converts HTTP 404 and empty results into `InstrumentNotFoundError`, and timeouts/5xx errors into `ProviderUnavailableError`.
+
+---
+
+## 8. Service Layer (`MarketDataService`)
 
 The [`MarketDataService`](../../backend/app/services/market_data.py) encapsulates business operations and delegates to the configured provider:
 
@@ -154,9 +167,10 @@ It also offers translation utilities to map normalized provider models into doma
 
 ---
 
-## 8. Extensibility for Phase 3
+## 9. Remaining Phase 3 Roadmap
 
-Phase 3 (Market Data Engine) will build upon this foundation by:
-1. Implementing real adapters under `backend/app/providers/` (e.g., `yahoo.py`, `polygon.py`).
-2. Adding caching and rate-limiting wrappers around `BaseMarketDataProvider`.
-3. Adding scheduled background workers to ingest quotes into the database via `PriceRepository`.
+Phase 3 (Market Data Engine & Ingestion) progresses through:
+1. **Live Adapter:** `YahooMarketDataProvider` integrated with `ProviderRegistry` and `Settings`. (Completed)
+2. **In-Memory Caching & Rate-Limiting:** Transparent TTL caching for quotes and bars to prevent exceeding upstream API rate limits.
+3. **Data Persistence:** Ingestion service writing normalized quotes and OHLCV bars into `prices` and `instruments` tables via `PriceRepository`.
+4. **Interactive Frontend Visualizations:** Time-series candlestick/line charts, interval toggles, and live search autocomplete.
