@@ -4,7 +4,7 @@
 
 The CentFlow platform requires market data (quotes, historical prices, instrument metadata) from external vendors. However, directly coupling business logic, database models, or API endpoints to a specific third-party provider (such as Yahoo Finance, Alpha Vantage, Polygon, or Twelve Data) creates severe vendor lock-in, fragile schemas, and difficult testability.
 
-To maintain architectural integrity, CentFlow enforces an **Adapter-based Provider Abstraction** layer.
+To maintain architectural integrity, CentFlow enforces an **Adapter-based Provider Abstraction** layer combined with a robust **Persistence & Backfill Ingestion Pipeline**.
 
 ### Core Architectural Principles
 
@@ -12,6 +12,7 @@ To maintain architectural integrity, CentFlow enforces an **Adapter-based Provid
 2. **Normalized Contracts:** All market data providers translate proprietary vendor responses into CentFlow's normalized Data Transfer Objects (`ProviderQuote`, `ProviderBar`, `ProviderInstrument`).
 3. **Pluggable Registry:** Providers are registered dynamically with `ProviderRegistry` and instantiated via configuration (`MARKET_DATA_PROVIDER`), making local testing and provider migration seamless.
 4. **Service Boundary:** `MarketDataService` serves as the single facade for upper layers to interact with market data.
+5. **Idempotent Persistence:** Observations, time-series OHLCV bars, and catalog instruments are persisted durably and idempotently into the relational database.
 
 ---
 
@@ -24,18 +25,24 @@ To maintain architectural integrity, CentFlow enforces an **Adapter-based Provid
                       │
                       ▼
        ┌───────────────────────────────┐
-       │      MarketDataService        │
-       └──────────────┬────────────────┘
-                      │
-                      ▼
-       ┌───────────────────────────────┐
-       │    BaseMarketDataProvider     │  (Contract / Interface)
+       │  MarketDataIngestionService   │
        └───────┬──────────────┬────────┘
                │              │
-      ┌────────▼────────┐    ┌▼─────────────────────────┐
-      │  MockProvider   │    │  External Vendor Adapter │
-      │  (Simulated)    │    │  (Yahoo, Polygon, etc.)  │
-      └─────────────────┘    └──────────────────────────┘
+               ▼              ▼
+     ┌──────────────────┐   ┌──────────────────────────┐
+     │ MarketDataService│   │ Database Repositories    │
+     └─────────┬────────┘   │ (Instrument, Price, etc) │
+               │            └──────────────────────────┘
+               ▼
+     ┌──────────────────┐
+     │  CachedProvider  │ (In-memory TTL cache & coalescing)
+     └─────────┬────────┘
+               │
+               ▼
+     ┌──────────────────┐
+     │  Active Provider │
+     │  (Mock / Yahoo)  │
+     └──────────────────┘
 ```
 
 ---
@@ -54,9 +61,18 @@ backend/app/
 │   ├── yahoo.py              # Live YahooMarketDataProvider (HTTP adapter)
 │   └── cache.py              # CachedMarketDataProvider proxy decorator
 │
+├── repositories/
+│   ├── __init__.py           # Exports all repositories
+│   ├── base.py               # BaseRepository
+│   ├── asset.py              # AssetRepository
+│   ├── exchange.py           # ExchangeRepository
+│   ├── instrument.py         # InstrumentRepository (provider discovery & upsert)
+│   └── price.py              # PriceRepository (idempotent quote & bulk bars)
+│
 └── services/
-    ├── __init__.py           # Exports MarketDataService
-    └── market_data.py        # MarketDataService application orchestrator
+    ├── __init__.py           # Exports MarketDataService, MarketDataIngestionService
+    ├── market_data.py        # MarketDataService application orchestrator
+    └── ingestion.py          # MarketDataIngestionService backfill & persistence pipeline
 ```
 
 ---
@@ -172,34 +188,33 @@ Transparent proxy decorator implementing `BaseMarketDataProvider`:
 - **Search Caching:** Keyed by `search:{QUERY}`, default TTL: 600 seconds (10 minutes).
 - **Diagnostic Bypass:** `get_status()` bypasses cache to always report live provider connectivity.
 
-### 8.3 Configuration (`backend/app/core/config.py`)
-- `MARKET_DATA_CACHE_ENABLED`: Master toggle (default: `true`).
-- `QUOTE_CACHE_TTL_SECONDS`: Quote cache TTL (default: `15`).
-- `HISTORY_CACHE_TTL_SECONDS`: History bars cache TTL (default: `300`).
-- `SEARCH_CACHE_TTL_SECONDS`: Search results cache TTL (default: `600`).
+---
+
+## 9. Ingestion & Persistence Pipeline (`MarketDataIngestionService`)
+
+Defined in [`backend/app/services/ingestion.py`](../../backend/app/services/ingestion.py), the ingestion service coordinates market data observation persistence and historical backfills:
+
+### 9.1 Key Operations
+- **`ensure_instrument(symbol)`:** Resolves instrument in database or discovers from provider search/quote, auto-creating related `AssetModel` and `ExchangeModel`.
+- **`ingest_quote(symbol, interval="tick")`:** Fetches live quote from provider, associates it with the instrument, and records a price observation idempotently into `PriceModel`.
+- **`backfill_historical_bars(symbol, start, end, interval="1d")`:** Fetches OHLCV bars over a date window, deduplicates against existing records, and bulk-persists into `PriceModel`.
+- **`sync_catalog(query)`:** Discovers instruments matching a keyword and persists their metadata in the catalog.
+- **`get_persisted_history(symbol, start=None, end=None, interval="1d")`:** Queries stored bars directly from the database for offline rendering and indicator calculations.
+
+### 9.2 Ingestion API Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/market-data/ingest/quote/{symbol}` | Ingest and persist live quote observation |
+| `POST` | `/api/v1/market-data/ingest/backfill/{symbol}` | Backfill historical OHLCV bars over time range |
+| `POST` | `/api/v1/market-data/ingest/sync-catalog` | Discover and persist instruments matching search query |
+| `GET` | `/api/v1/market-data/persisted-history/{symbol}` | Query durable price observations directly from database |
 
 ---
 
-## 9. Service Layer (`MarketDataService`)
+## 10. Phase 3 Roadmap Status
 
-The [`MarketDataService`](../../backend/app/services/market_data.py) encapsulates business operations, automatically wrapping the active provider with `CachedMarketDataProvider` when caching is enabled:
-
-```python
-service = MarketDataService()
-quote = await service.get_quote("AAPL")
-history = await service.get_historical_bars("AAPL", start_date, end_date)
-instruments = await service.search_instruments("Apple")
-cache_stats = service.get_cache_stats()  # {"hits": 12, "misses": 3, "coalesced": 5, ...}
-```
-
-It also offers translation utilities to map normalized provider models into domain entities (e.g. `to_domain_price(quote, instrument)`).
-
----
-
-## 10. Remaining Phase 3 Roadmap
-
-Phase 3 (Market Data Engine & Ingestion) progresses through:
 1. **Live Adapter:** `YahooMarketDataProvider` integrated with `ProviderRegistry` and `Settings`. (Completed)
 2. **In-Memory Caching & Rate-Limiting:** Transparent TTL caching for quotes, bars, and search with single-flight request coalescing. (Completed)
-3. **Data Persistence:** Ingestion service writing normalized quotes and OHLCV bars into `prices` and `instruments` tables via `PriceRepository`.
-4. **Interactive Frontend Visualizations:** Time-series candlestick/line charts, interval toggles, and live search autocomplete.
+3. **Data Persistence & Backfill Pipeline:** Ingestion service writing normalized quotes and OHLCV bars into `prices` and `instruments` tables via `PriceRepository`. (Completed)
+4. **Interactive Frontend Visualizations:** Time-series candlestick/line charts, interval toggles, and live search autocomplete. (Next)

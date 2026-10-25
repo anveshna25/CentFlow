@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Numeric, String, UniqueConstraint, func
+from sqlalchemy import Column, ForeignKey, Index, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import relationship
-from app.database.models.base import Base, generate_uuid
+from app.database.models.base import Base, UTCDateTime, generate_uuid
 
 
 class PriceModel(Base):
@@ -12,7 +12,7 @@ class PriceModel(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     instrument_id = Column(String(36), ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    timestamp = Column(UTCDateTime, nullable=False, index=True)
     price = Column(Numeric(18, 6), nullable=False)
     open = Column(Numeric(18, 6), nullable=True)
     high = Column(Numeric(18, 6), nullable=True)
@@ -24,7 +24,7 @@ class PriceModel(Base):
     source = Column(String(50), nullable=True)
 
     created_at = Column(
-        DateTime(timezone=True),
+        UTCDateTime,
         default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
         nullable=False,

@@ -50,3 +50,54 @@ class ProviderStatusSchema(BaseSchema):
     name: str = Field(..., description="Provider identifier.")
     is_active: bool = Field(..., description="Whether provider is online and operational.")
     message: Optional[str] = Field(default=None, description="Optional diagnostic message.")
+
+
+class PersistedPriceSchema(BaseSchema):
+    """Schema representing a durable market price observation from the database."""
+
+    id: str = Field(..., description="Observation unique identifier.")
+    instrument_id: str = Field(..., description="Associated instrument ID.")
+    timestamp: datetime = Field(..., description="Price timestamp in UTC.")
+    price: Decimal = Field(..., description="Observation or close price.")
+    open: Optional[Decimal] = Field(default=None, description="Open price if applicable.")
+    high: Optional[Decimal] = Field(default=None, description="High price if applicable.")
+    low: Optional[Decimal] = Field(default=None, description="Low price if applicable.")
+    close: Optional[Decimal] = Field(default=None, description="Close price if applicable.")
+    volume: Optional[Decimal] = Field(default=None, description="Volume if applicable.")
+    currency: str = Field(..., description="Denominated currency.")
+    interval: str = Field(..., description="Observation interval ('tick', '1d', etc.).")
+    source: Optional[str] = Field(default=None, description="Source provider identifier.")
+    created_at: Optional[datetime] = Field(default=None, description="Record creation timestamp.")
+
+
+class BackfillRequestSchema(BaseSchema):
+    """Request payload for triggering historical bar backfill."""
+
+    days: int = Field(default=30, ge=1, le=365, description="Number of past days to backfill.")
+    interval: str = Field(default="1d", description="Aggregation interval (e.g., '1d', '1h').")
+    start: Optional[datetime] = Field(default=None, description="Optional explicit start timestamp.")
+    end: Optional[datetime] = Field(default=None, description="Optional explicit end timestamp.")
+
+
+class BackfillResponseSchema(BaseSchema):
+    """Summary of backfilled historical price bars."""
+
+    symbol: str = Field(..., description="Instrument symbol backfilled.")
+    instrument_id: str = Field(..., description="Database instrument ID.")
+    bars_ingested: int = Field(..., description="Count of newly persisted bars.")
+    interval: str = Field(..., description="Aggregation interval.")
+    source: str = Field(..., description="Provider source identifier.")
+
+
+class SyncCatalogRequestSchema(BaseSchema):
+    """Request payload for searching and synchronizing instrument catalog."""
+
+    query: str = Field(..., min_length=1, description="Symbol or name keyword.")
+
+
+class SyncCatalogResponseSchema(BaseSchema):
+    """Response summary of synced catalog instruments."""
+
+    query: str = Field(..., description="Query executed.")
+    synced_count: int = Field(..., description="Number of instruments discovered and persisted.")
+    instruments: list[InstrumentResponseSchema] = Field(..., description="List of instruments synced.")

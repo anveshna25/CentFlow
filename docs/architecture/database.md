@@ -10,6 +10,7 @@ The CentFlow database foundation establishes the persistence layer for the platf
 2. **Dual-Environment Support:** The persistence layer supports lightweight SQLite for local development and automated testing out-of-the-box, while seamlessly connecting to PostgreSQL in production via connection strings.
 3. **Migration-First Schema Evolution:** All schema modifications are tracked as version-controlled migration scripts using Alembic.
 4. **Strong Typing & Auditability:** All stateful models enforce UUID surrogate keys, foreign key constraints, explicit nullability, and UTC audit timestamps.
+5. **Timezone Integrity:** `UTCDateTime` TypeDecorator ensures all timestamps persisted or retrieved across SQLite and PostgreSQL maintain consistent timezone-aware UTC representations.
 
 ---
 
@@ -43,7 +44,7 @@ backend/
 │   │   ├── session.py         # Engine creation, sessionmaker, get_db dependency
 │   │   └── models/            # Declarative SQLAlchemy models
 │   │       ├── __init__.py    # Aggregates and exports all models
-│   │       ├── base.py        # Base, TimestampMixin, generate_uuid
+│   │       ├── base.py        # Base, UTCDateTime, TimestampMixin, generate_uuid
 │   │       ├── asset.py       # AssetModel ('assets')
 │   │       ├── exchange.py    # ExchangeModel ('exchanges')
 │   │       ├── market.py      # MarketModel ('markets')
@@ -53,8 +54,12 @@ backend/
 │   │       └── portfolio.py   # PortfolioModel, PositionModel
 │   │
 │   └── repositories/
-│       ├── __init__.py        # Exports BaseRepository
-│       └── base.py            # Generic BaseRepository[T] with CRUD operations
+│       ├── __init__.py        # Exports all repositories
+│       ├── base.py            # Generic BaseRepository[T] with CRUD operations
+│       ├── asset.py           # AssetRepository
+│       ├── exchange.py        # ExchangeRepository
+│       ├── instrument.py      # InstrumentRepository
+│       └── price.py           # PriceRepository (idempotent quote and bulk bar operations)
 ```
 
 ---
@@ -94,7 +99,7 @@ The declarative models correspond directly to the approved data model in [`docs/
 | `exchanges` | `ExchangeModel` | 1-to-N with `InstrumentModel` |
 | `markets` | `MarketModel` | 1-to-N with `InstrumentModel` |
 | `instruments` | `InstrumentModel` | Belongs to `AssetModel`, `ExchangeModel`, `MarketModel`; 1-to-N with `PriceModel`, `PositionModel`, `WatchlistInstrumentModel` |
-| `prices` | `PriceModel` | Belongs to `InstrumentModel`; indexed on `(instrument_id, timestamp)` |
+| `prices` | `PriceModel` | Belongs to `InstrumentModel`; indexed on `(instrument_id, timestamp)` with unique constraint on `(instrument_id, interval, timestamp, source)` |
 | `watchlists` | `WatchlistModel` | 1-to-N with `WatchlistInstrumentModel` |
 | `watchlist_instruments` | `WatchlistInstrumentModel` | Many-to-Many join between `watchlists` and `instruments` |
 | `portfolios` | `PortfolioModel` | 1-to-N with `PositionModel` |
@@ -121,14 +126,27 @@ alembic downgrade -1
 
 ---
 
-## 7. Repository Pattern (`BaseRepository[T]`)
+## 7. Repository Implementations
 
-The generic [`BaseRepository`](../../backend/app/repositories/base.py) provides standard persistence operations:
-- `get_by_id(id: str) -> Optional[ModelType]`
-- `list(offset: int = 0, limit: int = 20) -> Sequence[ModelType]`
-- `count() -> int`
-- `create(entity: ModelType) -> ModelType`
-- `update(entity: ModelType) -> ModelType`
-- `delete(entity: ModelType) -> None`
+Domain services access database entities through concrete repositories inheriting from [`BaseRepository`](../../backend/app/repositories/base.py):
 
-Domain services subclass or wrap `BaseRepository` to implement custom query workflows without exposing SQLAlchemy internals to upper layers.
+### 7.1 `AssetRepository` ([`backend/app/repositories/asset.py`](../../backend/app/repositories/asset.py))
+- `get_by_name_and_class(name, asset_class)`
+- `get_or_create(name, asset_class, description, sector, industry)`
+
+### 7.2 `ExchangeRepository` ([`backend/app/repositories/exchange.py`](../../backend/app/repositories/exchange.py))
+- `get_by_code(code)`
+- `get_or_create(code, name, country, currency)`
+
+### 7.3 `InstrumentRepository` ([`backend/app/repositories/instrument.py`](../../backend/app/repositories/instrument.py))
+- `get_by_symbol(symbol)`
+- `search(query, limit=50)`
+- `list_active(offset=0, limit=100)`
+- `get_or_create_from_provider(provider_inst, default_currency="USD")`: Discovers or links existing `AssetModel` and `ExchangeModel`, maintaining metadata consistency.
+
+### 7.4 `PriceRepository` ([`backend/app/repositories/price.py`](../../backend/app/repositories/price.py))
+- `get_latest_price(instrument_id, interval=None)`
+- `get_historical_prices(instrument_id, start=None, end=None, interval=None)`: Retrieves ordered observations in ascending time sequence.
+- `count_for_instrument(instrument_id, interval=None)`
+- `insert_quote_observation(instrument_id, quote, interval="tick", source=None)`: Idempotently inserts or updates quote observations.
+- `bulk_insert_bars(instrument_id, bars, currency, interval="1d", source=None)`: Deduplicates and bulk-persists historical OHLCV bars.
