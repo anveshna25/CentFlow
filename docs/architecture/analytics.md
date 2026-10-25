@@ -35,10 +35,10 @@ React Product Experience
 
 ```text
 backend/app/analytics/
-├── __init__.py           # Public exports for domain contracts and calculations
-├── domain.py             # Analytical value objects, metrics, and observation windows
+├── __init__.py           # Public exports for domain contracts, calculations, and indicators
+├── domain.py             # Analytical value objects, metrics, indicator results, and observation windows
 ├── calculations.py       # Core deterministic price, return, volatility, and drawdown formulas
-└── indicators.py         # (Phase 4 subsequent step) Technical indicators (SMA, EMA, RSI, MACD, etc.)
+└── indicators.py         # Modular technical indicator algorithms (SMA, EMA, RSI, MACD, Bollinger Bands)
 ```
 
 ---
@@ -91,6 +91,25 @@ Fundamental distribution statistics for a price series:
 - `min_price` / `max_price`: Range bounds.
 - `data_points`: Total observation count.
 
+### `IndicatorSeries`
+Generic single-component time series with warmup period representation (`None` during warmup).
+
+### `MACDResult`
+Moving Average Convergence Divergence component series:
+- `macd_line`: Fast EMA minus Slow EMA.
+- `signal_line`: Exponential moving average of the MACD line.
+- `histogram`: MACD line minus Signal line.
+- `fast_period` / `slow_period` / `signal_period`: Configured parameters (defaults: 12, 26, 9).
+
+### `BollingerBandsResult`
+Bollinger Bands volatility envelope component series:
+- `upper_band`: Middle band plus $k \times \sigma$.
+- `middle_band`: Simple moving average.
+- `lower_band`: Middle band minus $k \times \sigma$.
+- `bandwidth`: Percentage band spread relative to middle band: $\frac{\text{Upper} - \text{Lower}}{\text{Middle}} \times 100$.
+- `percent_b`: Relative position within the bands: $\frac{\text{Price} - \text{Lower}}{\text{Upper} - \text{Lower}}$.
+- `window` / `num_std`: Configured window and standard deviation multiplier (defaults: 20, 2.0).
+
 ---
 
 ## 4. Quantitative Calculations (`app/analytics/calculations.py`)
@@ -122,11 +141,50 @@ Tracks peak and trough index coordinates and terminal recovery status.
 
 ---
 
-## 5. Next Steps in Phase 4
+## 5. Technical Indicators Engine (`app/analytics/indicators.py`)
+
+### 1. Simple Moving Average (SMA)
+For window $W$:
+$$ \text{SMA}_t = \frac{1}{W} \sum_{i=t-W+1}^t P_i \quad \text{for } t \ge W - 1 $$
+Values for $t < W - 1$ are returned as `None` (warmup period).
+
+### 2. Exponential Moving Average (EMA)
+Multiplier:
+$$ \alpha = \frac{2}{W + 1} $$
+Initial seed at $t = W - 1$ uses $\text{SMA}_W$. Subsequent values:
+$$ \text{EMA}_t = \alpha \times P_t + (1 - \alpha) \times \text{EMA}_{t-1} $$
+
+### 3. Relative Strength Index (RSI)
+J. Welles Wilder Jr.'s smoothed RSI over period $N$ (default 14):
+Initial averages over first $N$ price changes:
+$$ AG_N = \frac{1}{N} \sum G_i, \quad AL_N = \frac{1}{N} \sum L_i $$
+Wilder's smoothing for subsequent periods:
+$$ AG_t = \frac{AG_{t-1} \times (N - 1) + G_t}{N}, \quad AL_t = \frac{AL_{t-1} \times (N - 1) + L_t}{N} $$
+Relative Strength & Index:
+$$ RS_t = \frac{AG_t}{AL_t}, \quad \text{RSI}_t = 100 - \left(\frac{100}{1 + RS_t}\right) $$
+Boundary cases ($AL_t = 0$) default safely to $100.00$ ($AG_t > 0$) or $50.00$ ($AG_t = 0$).
+
+### 4. Moving Average Convergence Divergence (MACD)
+Standard parameters: fast=12, slow=26, signal=9.
+- $\text{MACD}_t = \text{EMA}_{12}(P)_t - \text{EMA}_{26}(P)_t$
+- $\text{Signal}_t = \text{EMA}_9(\text{MACD})_t$
+- $\text{Histogram}_t = \text{MACD}_t - \text{Signal}_t$
+
+### 5. Bollinger Bands
+Window $W = 20$, standard deviation multiplier $k = 2.0$:
+- $\text{Middle}_t = \text{SMA}_{20}(P)_t$
+- $\text{Upper}_t = \text{Middle}_t + k \times \sigma_t$
+- $\text{Lower}_t = \text{Middle}_t - k \times \sigma_t$
+- $\text{Bandwidth}_t = \frac{\text{Upper}_t - \text{Lower}_t}{\text{Middle}_t} \times 100$
+- $\%B_t = \frac{P_t - \text{Lower}_t}{\text{Upper}_t - \text{Lower}_t}$
+
+---
+
+## 6. Next Steps in Phase 4
 
 Following dependency order:
-1. **Issue #38 (Current):** Analytics domain and core price-based calculations.
-2. **Issue #39:** Technical indicators engine (SMA, EMA, RSI, MACD, Bollinger Bands).
+1. **Issue #38 (Complete):** Analytics domain and core price-based calculations.
+2. **Issue #39 (Complete / Ready for PR):** Technical indicators engine (SMA, EMA, RSI, MACD, Bollinger Bands).
 3. **Issue #40:** Analytics service layer and market intelligence metrics (Trend, Momentum, Volatility Regime).
 4. **Issue #41:** Analytics API endpoints and request/response schemas.
 5. **Issue #42:** Product integration into frontend dashboards and interactive charts.
