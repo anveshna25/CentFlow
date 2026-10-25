@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { MarketsPage } from './pages/MarketsPage'
 import { WatchlistsPage } from './pages/WatchlistsPage'
 import { PortfoliosPage } from './pages/PortfoliosPage'
+import { AssetDetailModal } from './components/market/AssetDetailModal'
 
 function MainContent({ searchValue }) {
   const { activePage } = useNavigation()
@@ -26,12 +27,24 @@ function MainContent({ searchValue }) {
 
 function App() {
   const [searchValue, setSearchValue] = useState('')
+  const [globalInspectingAsset, setGlobalInspectingAsset] = useState(null)
 
   return (
     <NavigationProvider>
-      <AppLayout onSearch={setSearchValue} searchValue={searchValue}>
+      <AppLayout
+        onSearch={setSearchValue}
+        searchValue={searchValue}
+        onSelectAsset={(asset) => setGlobalInspectingAsset(asset)}
+      >
         <MainContent searchValue={searchValue} />
       </AppLayout>
+
+      {globalInspectingAsset && (
+        <AssetDetailModal
+          instrument={globalInspectingAsset}
+          onClose={() => setGlobalInspectingAsset(null)}
+        />
+      )}
     </NavigationProvider>
   )
 }
