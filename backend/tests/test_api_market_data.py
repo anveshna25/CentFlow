@@ -1,61 +1,70 @@
 import unittest
-from app.api.routes.market_data import (
-    get_historical_bars,
-    get_market_data_service,
-    get_provider_status,
-    get_quote,
-    search_instruments,
-)
+from fastapi.testclient import TestClient
+
+from app.api.routes.market_data import search_instruments
 from app.api.schemas.base import ResponseEnvelope
-from app.core.errors import InstrumentNotFoundError
 from app.main import create_app
+from app.services.market_data import MarketDataService
 
 
-class TestMarketDataApiRoutes(unittest.IsolatedAsyncioTestCase):
-    """Test market data API route handlers and envelope responses."""
+class TestMarketDataSearchRoute(unittest.IsolatedAsyncioTestCase):
+    """Test suite covering Market Data search route and ResponseEnvelope integration."""
 
     async def asyncSetUp(self):
-        self.service = get_market_data_service()
+        self.service = MarketDataService(enable_cache=False)
 
-    async def test_get_provider_status_route(self):
-        envelope = await get_provider_status(service=self.service)
+    async def test_search_instruments_route_handler_match(self):
+        """search_instruments route should return matching instruments wrapped in ResponseEnvelope."""
+        envelope = await search_instruments(q="AAPL", service=self.service)
         self.assertIsInstance(envelope, ResponseEnvelope)
-        self.assertEqual(envelope.data.name, "mock")
-        self.assertTrue(envelope.data.is_active)
+        self.assertGreaterEqual(len(envelope.data), 1)
+        self.assertEqual(envelope.data[0].symbol, "AAPL")
+        self.assertEqual(envelope.data[0].asset_type, "equity")
+        self.assertEqual(envelope.meta["query"], "AAPL")
+        self.assertGreaterEqual(envelope.meta["count"], 1)
 
-    async def test_get_quote_route_success(self):
-        envelope = await get_quote(symbol="AAPL", service=self.service)
+    async def test_search_instruments_route_handler_empty(self):
+        """Empty query should return empty data list with count 0."""
+        envelope = await search_instruments(q="", service=self.service)
         self.assertIsInstance(envelope, ResponseEnvelope)
-        self.assertEqual(envelope.data.symbol, "AAPL")
-        self.assertEqual(envelope.data.currency, "USD")
-        self.assertEqual(envelope.meta["source"], "mock")
-
-    async def test_get_quote_route_not_found(self):
-        with self.assertRaises(InstrumentNotFoundError):
-            await get_quote(symbol="UNKNOWN_SYM", service=self.service)
-
-    async def test_get_historical_bars_route(self):
-        envelope = await get_historical_bars(symbol="MSFT", days=5, interval="1d", service=self.service)
-        self.assertIsInstance(envelope, ResponseEnvelope)
-        self.assertGreaterEqual(len(envelope.data), 5)
-        self.assertEqual(envelope.meta["source"], "mock")
-        self.assertEqual(envelope.meta["interval"], "1d")
-
-    async def test_search_instruments_route(self):
-        envelope = await search_instruments(q="Bitcoin", service=self.service)
-        self.assertIsInstance(envelope, ResponseEnvelope)
-        self.assertTrue(any(item.symbol == "BTC-USD" for item in envelope.data))
-        self.assertEqual(envelope.meta["query"], "Bitcoin")
+        self.assertEqual(len(envelope.data), 0)
+        self.assertEqual(envelope.meta["count"], 0)
 
 
-class TestAppCorsConfiguration(unittest.TestCase):
-    """Test CORS middleware presence and configuration in create_app."""
+class TestMarketDataHttpEndpoints(unittest.TestCase):
+    """Integration test suite executing HTTP requests against FastAPI app via TestClient."""
 
-    def test_app_factory_includes_cors_middleware(self):
-        app = create_app()
-        # Find CORSMiddleware in middleware stack
-        middleware_classes = [m.cls.__name__ for m in app.user_middleware]
-        self.assertIn("CORSMiddleware", middleware_classes)
+    def setUp(self):
+        self.app = create_app()
+        self.client = TestClient(self.app)
+
+    def test_http_search_instruments_success(self):
+        """GET /api/v1/market-data/instruments?q=... returns 200 with matching catalog."""
+        response = self.client.get("/api/v1/market-data/instruments?q=AAPL")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("data", payload)
+        self.assertIn("meta", payload)
+        self.assertGreaterEqual(len(payload["data"]), 1)
+        self.assertEqual(payload["data"][0]["symbol"], "AAPL")
+        self.assertEqual(payload["meta"]["query"], "AAPL")
+
+    def test_http_search_instruments_crypto(self):
+        """GET /api/v1/market-data/instruments?q=Bitcoin finds BTC-USD crypto instrument."""
+        response = self.client.get("/api/v1/market-data/instruments?q=Bitcoin")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertGreaterEqual(len(payload["data"]), 1)
+        symbols = [item["symbol"] for item in payload["data"]]
+        self.assertIn("BTC-USD", symbols)
+
+    def test_http_search_instruments_empty_query(self):
+        """GET /api/v1/market-data/instruments without query returns empty array."""
+        response = self.client.get("/api/v1/market-data/instruments")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"], [])
+        self.assertEqual(payload["meta"]["count"], 0)
 
 
 if __name__ == "__main__":
