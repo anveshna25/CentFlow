@@ -3,6 +3,7 @@ from app.repositories.base import BaseRepository
 from app.repositories.exchange import ExchangeRepository
 from app.repositories.instrument import InstrumentRepository
 from app.repositories.price import PriceRepository
+from app.repositories.watchlist import WatchlistRepository
 
 __all__ = [
     "BaseRepository",
@@ -10,4 +11,5 @@ __all__ = [
     "ExchangeRepository",
     "InstrumentRepository",
     "PriceRepository",
+    "WatchlistRepository",
 ]
