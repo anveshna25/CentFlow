@@ -14,6 +14,7 @@ import {
   getIndicatorSeries,
   getReturnsAnalysis,
 } from '../api/analytics'
+import { getDefaultWatchlist, addToWatchlist, removeFromWatchlist } from '../api/watchlist'
 
 const DEFAULT_INSTRUMENTS = [
   { symbol: 'AAPL', name: 'Apple Inc.', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 185.50, change: '+0.87%', isUp: true, volume: '52.4M' },
@@ -33,8 +34,8 @@ const TIMEFRAME_CONFIG = {
 }
 
 export function MarketsPage({ externalSearch = '' }) {
-  const [, startTransition] = useTransition()
   const { pageParams } = useNavigation()
+  const [, startTransition] = useTransition()
   const autoOpenedSymbolRef = useRef(null)
   const [instruments, setInstruments] = useState(DEFAULT_INSTRUMENTS)
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -42,6 +43,8 @@ export function MarketsPage({ externalSearch = '' }) {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [watchlistId, setWatchlistId] = useState(null)
+  const [isInWatchlist, setIsInWatchlist] = useState(false)
 
   // Selected Instrument Detail & Chart State
   const [selectedInstrument, setSelectedInstrument] = useState(null)
@@ -222,6 +225,7 @@ export function MarketsPage({ externalSearch = '' }) {
   const handleOpenDetail = useCallback((inst) => {
     startTransition(() => {
       setSelectedInstrument(inst)
+      setIsInWatchlist(false)
       setActionFeedback(null)
     })
   }, [])
@@ -252,12 +256,64 @@ export function MarketsPage({ externalSearch = '' }) {
 
   const handleCloseDetail = () => {
     setSelectedInstrument(null)
+    setIsInWatchlist(false)
     setQuoteDetail(null)
     setChartBars([])
     setIndicatorsData(null)
     setIntelligenceDetail(null)
     setReturnsData(null)
     setActionFeedback(null)
+  }
+
+  // Load default watchlist on mount
+  useEffect(() => {
+    let isCancelled = false
+    getDefaultWatchlist()
+      .then((wl) => {
+        if (!isCancelled && wl?.id) setWatchlistId(wl.id)
+      })
+      .catch(() => {})
+    return () => {
+      isCancelled = true
+    }
+  }, [])
+
+  // Check if selected instrument is in watchlist
+  useEffect(() => {
+    if (!selectedInstrument || !watchlistId) return
+
+    let isCancelled = false
+    getDefaultWatchlist()
+      .then((wl) => {
+        if (!isCancelled && wl?.items) {
+          const exists = wl.items.some(
+            (item) => item.symbol.toUpperCase() === selectedInstrument.symbol.toUpperCase()
+          )
+          setIsInWatchlist(exists)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      isCancelled = true
+    }
+  }, [selectedInstrument, watchlistId])
+
+
+  const handleToggleWatchlist = async () => {
+    if (!selectedInstrument || !watchlistId) return
+    try {
+      if (isInWatchlist) {
+        await removeFromWatchlist(watchlistId, selectedInstrument.symbol)
+        setIsInWatchlist(false)
+        setActionFeedback({ type: 'info', message: `Removed ${selectedInstrument.symbol} from watchlist.` })
+      } else {
+        await addToWatchlist(watchlistId, selectedInstrument.symbol)
+        setIsInWatchlist(true)
+        setActionFeedback({ type: 'success', message: `Added ${selectedInstrument.symbol} to watchlist!` })
+      }
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Watchlist action failed.' })
+    }
   }
 
   const handlePersistQuote = async () => {
@@ -525,6 +581,8 @@ export function MarketsPage({ externalSearch = '' }) {
           onPersistQuote={handlePersistQuote}
           onBackfillBars={handleBackfillBars}
           actionFeedback={actionFeedback}
+          isInWatchlist={isInWatchlist}
+          onToggleWatchlist={handleToggleWatchlist}
         />
       )}
     </div>
