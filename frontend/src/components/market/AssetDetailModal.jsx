@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { Badge } from '../common/Badge'
 import { PriceChart } from './PriceChart'
 import { MarketIntelligenceCard } from './MarketIntelligenceCard'
+import { TechnicalPostureBadge } from '../analytics'
+import { getAnalyticsSummary, getReturnsAnalysis } from '../../api/analytics'
+import { getQuote, getHistoricalBars } from '../../api/marketData'
 import { useNavigation } from '../../state/NavigationContext'
 import { PAGES } from '../../state/pages'
 
@@ -29,12 +32,71 @@ export function AssetDetailModal({
   onPersistQuote,
   onBackfillBars,
   actionFeedback = null,
-  isInWatchlist = false,
-  onToggleWatchlist,
 }) {
   const { navigate } = useNavigation()
   const [activeTab, setActiveTab] = useState('comprehensive') // 'comprehensive' | 'chart' | 'intelligence' | 'profile'
   const [watchlistAdded, setWatchlistAdded] = useState(false)
+  const [fetchedIntel, setFetchedIntel] = useState(null)
+  const [fetchedReturns, setFetchedReturns] = useState(null)
+  const [fetchedQuote, setFetchedQuote] = useState(null)
+  const [fetchedBars, setFetchedBars] = useState([])
+  const [localTimeframe, setLocalTimeframe] = useState(chartTimeframe)
+
+  // On-demand fetch if analytics or quotes were not preloaded
+  useEffect(() => {
+    let isCancelled = false
+    if (!intelligence && instrument?.symbol) {
+      getAnalyticsSummary(instrument.symbol, 365, '1d')
+        .then((res) => {
+          if (!isCancelled && res?.data) setFetchedIntel(res.data)
+        })
+        .catch(() => null)
+    }
+    if (!returnsAnalysis && instrument?.symbol) {
+      getReturnsAnalysis(instrument.symbol, 365, '1d', 252)
+        .then((res) => {
+          if (!isCancelled && res?.data) setFetchedReturns(res.data)
+        })
+        .catch(() => null)
+    }
+    if (!quote && instrument?.symbol) {
+      getQuote(instrument.symbol)
+        .then((res) => {
+          if (!isCancelled && res?.data) setFetchedQuote(res.data)
+        })
+        .catch(() => null)
+    }
+    if (chartBars.length === 0 && instrument?.symbol) {
+      const days = localTimeframe === '1D' ? 1 : localTimeframe === '1W' ? 7 : localTimeframe === '1Y' || localTimeframe === 'ALL' ? 365 : 30
+      getHistoricalBars(instrument.symbol, days, '1d')
+        .then((res) => {
+          if (!isCancelled && res?.data) setFetchedBars(res.data)
+        })
+        .catch(() => null)
+    }
+    return () => {
+      isCancelled = true
+    }
+  }, [instrument?.symbol, intelligence, returnsAnalysis, quote, chartBars.length, localTimeframe])
+
+  const resolvedIntel = intelligence || fetchedIntel
+  const resolvedReturns = returnsAnalysis || fetchedReturns
+  const resolvedQuote = quote || fetchedQuote
+  const resolvedBars = chartBars.length > 0 ? chartBars : fetchedBars
+
+  const handleTimeframeChange = (tf) => {
+    setLocalTimeframe(tf)
+    if (onTimeframeChange) {
+      onTimeframeChange(tf)
+    } else if (instrument?.symbol) {
+      const days = tf === '1D' ? 1 : tf === '1W' ? 7 : tf === '1Y' || tf === 'ALL' ? 365 : 30
+      getHistoricalBars(instrument.symbol, days, '1d')
+        .then((res) => {
+          if (res?.data) setFetchedBars(res.data)
+        })
+        .catch(() => null)
+    }
+  }
 
   // Keyboard Escape listener to close modal
   useEffect(() => {
@@ -50,11 +112,11 @@ export function AssetDetailModal({
   if (!instrument) return null
 
   // Calculate pricing numbers
-  const currentPrice = Number(quote?.price ?? instrument.price ?? 0)
-  const low24h = quote?.low ? Number(quote.low) : currentPrice * 0.985
-  const high24h = quote?.high ? Number(quote.high) : currentPrice * 1.015
-  const prevClose = quote?.previous_close ? Number(quote.previous_close) : null
-  const openPrice = quote?.open ? Number(quote.open) : null
+  const currentPrice = Number(resolvedQuote?.price ?? instrument.price ?? 0)
+  const low24h = resolvedQuote?.low ? Number(resolvedQuote.low) : currentPrice * 0.985
+  const high24h = resolvedQuote?.high ? Number(resolvedQuote.high) : currentPrice * 1.015
+  const prevClose = resolvedQuote?.previous_close ? Number(resolvedQuote.previous_close) : null
+  const openPrice = resolvedQuote?.open ? Number(resolvedQuote.open) : null
 
   // Calculate position within 24h range (0 to 100%)
   const rangeSpan = high24h - low24h
@@ -64,12 +126,8 @@ export function AssetDetailModal({
   const isUp = instrument.isUp ?? (!String(changeText).startsWith('-'))
 
   const handleAddToWatchlist = () => {
-    if (onToggleWatchlist) {
-      onToggleWatchlist()
-    } else {
-      setWatchlistAdded(true)
-      setTimeout(() => setWatchlistAdded(false), 3000)
-    }
+    setWatchlistAdded(true)
+    setTimeout(() => setWatchlistAdded(false), 3000)
   }
 
   const handleAddToPortfolio = () => {
@@ -142,9 +200,9 @@ export function AssetDetailModal({
               id="cf-btn-add-watchlist"
               onClick={handleAddToWatchlist}
               style={{
-                background: isInWatchlist || watchlistAdded ? 'var(--cf-bullish-bg)' : 'var(--cf-bg-surface-elevated)',
-                color: isInWatchlist || watchlistAdded ? 'var(--cf-bullish)' : 'var(--cf-text-primary)',
-                border: `1px solid ${isInWatchlist || watchlistAdded ? 'var(--cf-bullish-border)' : 'var(--cf-border)'}`,
+                background: watchlistAdded ? 'var(--cf-bullish-bg)' : 'var(--cf-bg-surface-elevated)',
+                color: watchlistAdded ? 'var(--cf-bullish)' : 'var(--cf-text-primary)',
+                border: `1px solid ${watchlistAdded ? 'var(--cf-bullish-border)' : 'var(--cf-border)'}`,
                 borderRadius: 'var(--cf-radius-md)',
                 padding: '7px 12px',
                 fontSize: '12px',
@@ -156,7 +214,7 @@ export function AssetDetailModal({
                 transition: 'all var(--cf-transition-fast)',
               }}
             >
-              <span>{isInWatchlist ? '★ In Watchlist' : watchlistAdded ? '✓ Added to Watchlist' : '+ Watchlist'}</span>
+              <span>{watchlistAdded ? '✓ Added to Watchlist' : '+ Watchlist'}</span>
             </button>
 
             <button
@@ -217,7 +275,7 @@ export function AssetDetailModal({
             gap: 'var(--cf-space-3)',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 'var(--cf-space-2)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--cf-space-2)' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
               <span style={{ fontSize: '28px', fontWeight: 700, color: 'var(--cf-text-primary)', letterSpacing: '-0.02em' }}>
                 ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -236,11 +294,19 @@ export function AssetDetailModal({
               </span>
             </div>
 
-            {prevClose && (
-              <div style={{ fontSize: '12px', color: 'var(--cf-text-muted)' }}>
-                Prev Close: ${prevClose.toFixed(2)}
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <TechnicalPostureBadge
+                posture={resolvedIntel}
+                showScore
+                size="md"
+                id="cf-asset-detail-posture-badge"
+              />
+              {prevClose && (
+                <div style={{ fontSize: '12px', color: 'var(--cf-text-muted)' }}>
+                  Prev Close: ${prevClose.toFixed(2)}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Visual 24h High/Low Slider Gauge */}
@@ -288,6 +354,47 @@ export function AssetDetailModal({
               />
             </div>
           </div>
+
+          {/* Quantitative Analytics Posture Strip */}
+          {resolvedIntel && (
+            <div
+              id="cf-detail-factor-strip"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                gap: 'var(--cf-space-2)',
+                marginTop: 'var(--cf-space-1)',
+                borderTop: '1px solid var(--cf-border)',
+                paddingTop: 'var(--cf-space-2)',
+                fontSize: '11px',
+              }}
+            >
+              <div>
+                <span style={{ color: 'var(--cf-text-muted)' }}>MOMENTUM: </span>
+                <span style={{ color: 'var(--cf-text-primary)', fontWeight: 600 }}>
+                  {resolvedIntel.momentum_state?.toUpperCase() || 'NEUTRAL'}
+                </span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--cf-text-muted)' }}>VOLATILITY: </span>
+                <span style={{ color: 'var(--cf-text-primary)', fontWeight: 600 }}>
+                  {resolvedIntel.volatility_regime?.toUpperCase() || 'NORMAL'}
+                </span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--cf-text-muted)' }}>FACTOR SCORE: </span>
+                <span style={{ color: 'var(--cf-brand-cyan)', fontWeight: 700 }}>
+                  {resolvedIntel.composite_score ?? 50} / 100
+                </span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--cf-text-muted)' }}>VERDICT: </span>
+                <span style={{ color: 'var(--cf-text-secondary)', fontWeight: 600 }}>
+                  {resolvedIntel.summary_verdict || 'Balanced'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 3. Key Financial Statistics Grid */}
@@ -393,8 +500,8 @@ export function AssetDetailModal({
           <MarketIntelligenceCard
             id={`detail-intelligence-${instrument.symbol}`}
             symbol={instrument.symbol}
-            intelligence={intelligence}
-            returnsAnalysis={returnsAnalysis}
+            intelligence={resolvedIntel}
+            returnsAnalysis={resolvedReturns}
             isLoading={isLoading}
           />
         )}
@@ -403,13 +510,13 @@ export function AssetDetailModal({
         {(activeTab === 'comprehensive' || activeTab === 'chart') && (
           <PriceChart
             id={`detail-chart-${instrument.symbol}`}
-            data={chartBars}
+            data={resolvedBars}
             indicators={indicators}
             symbol={instrument.symbol}
-            currency={quote?.currency || 'USD'}
+            currency={resolvedQuote?.currency || 'USD'}
             isLoading={isLoading}
-            timeframe={chartTimeframe}
-            onTimeframeChange={onTimeframeChange}
+            timeframe={localTimeframe}
+            onTimeframeChange={handleTimeframeChange}
             height={340}
           />
         )}
