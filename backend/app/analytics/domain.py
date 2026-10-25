@@ -64,3 +64,39 @@ class PriceSeriesSummary:
     min_price: Decimal
     max_price: Decimal
     data_points: int
+
+
+@dataclass(frozen=True)
+class IndicatorSeries:
+    """Time-indexed single indicator series with warmup handling."""
+
+    name: str
+    values: list[Optional[Decimal]]
+    timestamps: Optional[list[datetime]] = None
+
+
+@dataclass(frozen=True)
+class MACDResult:
+    """Moving Average Convergence Divergence component series."""
+
+    macd_line: list[Optional[Decimal]]
+    signal_line: list[Optional[Decimal]]
+    histogram: list[Optional[Decimal]]
+    fast_period: int = 12
+    slow_period: int = 26
+    signal_period: int = 9
+    timestamps: Optional[list[datetime]] = None
+
+
+@dataclass(frozen=True)
+class BollingerBandsResult:
+    """Bollinger Bands volatility envelope component series."""
+
+    upper_band: list[Optional[Decimal]]
+    middle_band: list[Optional[Decimal]]
+    lower_band: list[Optional[Decimal]]
+    bandwidth: list[Optional[Decimal]]
+    percent_b: list[Optional[Decimal]]
+    window: int = 20
+    num_std: Decimal = Decimal("2.0")
+    timestamps: Optional[list[datetime]] = None

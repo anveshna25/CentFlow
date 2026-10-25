@@ -9,11 +9,21 @@ from app.analytics.calculations import (
     to_decimal,
 )
 from app.analytics.domain import (
+    BollingerBandsResult,
     CalculationPeriod,
     DrawdownMetric,
+    IndicatorSeries,
+    MACDResult,
     PeriodReturn,
     PriceSeriesSummary,
     VolatilityMetrics,
+)
+from app.analytics.indicators import (
+    calculate_bollinger_bands,
+    calculate_ema,
+    calculate_macd,
+    calculate_rsi,
+    calculate_sma,
 )
 
 __all__ = [
@@ -22,6 +32,9 @@ __all__ = [
     "VolatilityMetrics",
     "DrawdownMetric",
     "PriceSeriesSummary",
+    "IndicatorSeries",
+    "MACDResult",
+    "BollingerBandsResult",
     "to_decimal",
     "calculate_price_change",
     "calculate_returns",
@@ -30,4 +43,9 @@ __all__ = [
     "calculate_rolling_volatility",
     "calculate_drawdowns",
     "calculate_price_summary",
+    "calculate_sma",
+    "calculate_ema",
+    "calculate_rsi",
+    "calculate_macd",
+    "calculate_bollinger_bands",
 ]
