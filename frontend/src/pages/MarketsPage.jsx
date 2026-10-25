@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useTransition } from 'react'
 import { Card, Badge, LoadingState, ErrorState, EmptyState } from '../components/common'
 import { PriceChart } from '../components/market/PriceChart'
 import { MarketIntelligenceCard } from '../components/market/MarketIntelligenceCard'
+import { useNavigation } from '../state/NavigationContext'
 import {
   searchInstruments,
   getQuote,
@@ -14,6 +15,7 @@ import {
   getIndicatorSeries,
   getReturnsAnalysis,
 } from '../api/analytics'
+import { getDefaultWatchlist, addToWatchlist, removeFromWatchlist } from '../api/watchlist'
 
 const DEFAULT_INSTRUMENTS = [
   { symbol: 'AAPL', name: 'Apple Inc.', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 185.50, change: '+0.87%', isUp: true, volume: '52.4M' },
@@ -33,6 +35,7 @@ const TIMEFRAME_CONFIG = {
 }
 
 export function MarketsPage({ externalSearch = '' }) {
+  const { pageParams } = useNavigation()
   const [, startTransition] = useTransition()
   const [instruments, setInstruments] = useState(DEFAULT_INSTRUMENTS)
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -40,6 +43,8 @@ export function MarketsPage({ externalSearch = '' }) {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [watchlistId, setWatchlistId] = useState(null)
+  const [isInWatchlist, setIsInWatchlist] = useState(false)
 
   // Selected Instrument Detail & Chart State
   const [selectedInstrument, setSelectedInstrument] = useState(null)
@@ -221,6 +226,7 @@ export function MarketsPage({ externalSearch = '' }) {
   const handleOpenDetail = (inst) => {
     startTransition(() => {
       setSelectedInstrument(inst)
+      setIsInWatchlist(false)
       setActionFeedback(null)
       setDetailTab('both')
     })
@@ -228,6 +234,7 @@ export function MarketsPage({ externalSearch = '' }) {
 
   const handleCloseDetail = () => {
     setSelectedInstrument(null)
+    setIsInWatchlist(false)
     setQuoteDetail(null)
     setChartBars([])
     setIndicatorsData(null)
@@ -235,6 +242,78 @@ export function MarketsPage({ externalSearch = '' }) {
     setReturnsData(null)
     setActionFeedback(null)
     setDetailTab('both')
+  }
+
+  // Load default watchlist on mount
+  useEffect(() => {
+    let isCancelled = false
+    getDefaultWatchlist()
+      .then((wl) => {
+        if (!isCancelled && wl?.id) setWatchlistId(wl.id)
+      })
+      .catch(() => {})
+    return () => {
+      isCancelled = true
+    }
+  }, [])
+
+  // Check if selected instrument is in watchlist
+  useEffect(() => {
+    if (!selectedInstrument || !watchlistId) return
+
+    let isCancelled = false
+    getDefaultWatchlist()
+      .then((wl) => {
+        if (!isCancelled && wl?.items) {
+          const exists = wl.items.some(
+            (item) => item.symbol.toUpperCase() === selectedInstrument.symbol.toUpperCase()
+          )
+          setIsInWatchlist(exists)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      isCancelled = true
+    }
+  }, [selectedInstrument, watchlistId])
+
+  // Open asset if navigated with pageParams.symbol
+  useEffect(() => {
+    if (pageParams?.symbol) {
+      const sym = pageParams.symbol.toUpperCase()
+      const existing = instruments.find((i) => i.symbol.toUpperCase() === sym)
+      if (existing) {
+        handleOpenDetail(existing)
+      } else {
+        handleOpenDetail({
+          symbol: sym,
+          name: sym,
+          assetType: 'equity',
+          exchange: 'Market',
+          price: 0,
+          change: '0.00%',
+          isUp: true,
+          volume: 'N/A',
+        })
+      }
+    }
+  }, [pageParams?.symbol, instruments])
+
+  const handleToggleWatchlist = async () => {
+    if (!selectedInstrument || !watchlistId) return
+    try {
+      if (isInWatchlist) {
+        await removeFromWatchlist(watchlistId, selectedInstrument.symbol)
+        setIsInWatchlist(false)
+        setActionFeedback({ type: 'info', message: `Removed ${selectedInstrument.symbol} from watchlist.` })
+      } else {
+        await addToWatchlist(watchlistId, selectedInstrument.symbol)
+        setIsInWatchlist(true)
+        setActionFeedback({ type: 'success', message: `Added ${selectedInstrument.symbol} to watchlist!` })
+      }
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Watchlist action failed.' })
+    }
   }
 
   const handlePersistQuote = async () => {
@@ -543,26 +622,51 @@ export function MarketsPage({ externalSearch = '' }) {
                 </div>
               </div>
 
-              {/* Close Button */}
-              <button
-                id="cf-chart-modal-close"
-                onClick={handleCloseDetail}
-                style={{
-                  background: 'var(--cf-bg-surface-elevated)',
-                  border: '1px solid var(--cf-border)',
-                  color: 'var(--cf-text-secondary)',
-                  borderRadius: 'var(--cf-radius-full)',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                }}
-              >
-                ✕
-              </button>
+              {/* Modal Actions */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  id={`cf-detail-watchlist-btn-${selectedInstrument.symbol}`}
+                  onClick={handleToggleWatchlist}
+                  style={{
+                    background: isInWatchlist ? 'rgba(16, 185, 129, 0.15)' : 'var(--cf-bg-surface-elevated)',
+                    color: isInWatchlist ? 'var(--cf-bullish)' : 'var(--cf-text-secondary)',
+                    border: `1px solid ${isInWatchlist ? 'var(--cf-bullish-border)' : 'var(--cf-border)'}`,
+                    borderRadius: 'var(--cf-radius-md)',
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all var(--cf-transition-fast)',
+                  }}
+                >
+                  <span>{isInWatchlist ? '★' : '☆'}</span>
+                  <span>{isInWatchlist ? 'In Watchlist' : 'Add to Watchlist'}</span>
+                </button>
+
+                {/* Close Button */}
+                <button
+                  id="cf-chart-modal-close"
+                  onClick={handleCloseDetail}
+                  style={{
+                    background: 'var(--cf-bg-surface-elevated)',
+                    border: '1px solid var(--cf-border)',
+                    color: 'var(--cf-text-secondary)',
+                    borderRadius: 'var(--cf-radius-full)',
+                    width: '32px',
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {/* Quote Key Statistics Grid */}
