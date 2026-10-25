@@ -4,6 +4,7 @@ import { PriceChart } from './PriceChart'
 import { MarketIntelligenceCard } from './MarketIntelligenceCard'
 import { TechnicalPostureBadge } from '../analytics'
 import { getAnalyticsSummary, getReturnsAnalysis } from '../../api/analytics'
+import { getQuote, getHistoricalBars } from '../../api/marketData'
 import { useNavigation } from '../../state/NavigationContext'
 import { PAGES } from '../../state/pages'
 
@@ -37,8 +38,11 @@ export function AssetDetailModal({
   const [watchlistAdded, setWatchlistAdded] = useState(false)
   const [fetchedIntel, setFetchedIntel] = useState(null)
   const [fetchedReturns, setFetchedReturns] = useState(null)
+  const [fetchedQuote, setFetchedQuote] = useState(null)
+  const [fetchedBars, setFetchedBars] = useState([])
+  const [localTimeframe, setLocalTimeframe] = useState(chartTimeframe)
 
-  // On-demand fetch if analytics were not preloaded
+  // On-demand fetch if analytics or quotes were not preloaded
   useEffect(() => {
     let isCancelled = false
     if (!intelligence && instrument?.symbol) {
@@ -55,13 +59,44 @@ export function AssetDetailModal({
         })
         .catch(() => null)
     }
+    if (!quote && instrument?.symbol) {
+      getQuote(instrument.symbol)
+        .then((res) => {
+          if (!isCancelled && res?.data) setFetchedQuote(res.data)
+        })
+        .catch(() => null)
+    }
+    if (chartBars.length === 0 && instrument?.symbol) {
+      const days = localTimeframe === '1D' ? 1 : localTimeframe === '1W' ? 7 : localTimeframe === '1Y' || localTimeframe === 'ALL' ? 365 : 30
+      getHistoricalBars(instrument.symbol, days, '1d')
+        .then((res) => {
+          if (!isCancelled && res?.data) setFetchedBars(res.data)
+        })
+        .catch(() => null)
+    }
     return () => {
       isCancelled = true
     }
-  }, [instrument?.symbol, intelligence, returnsAnalysis])
+  }, [instrument?.symbol, intelligence, returnsAnalysis, quote, chartBars.length, localTimeframe])
 
   const resolvedIntel = intelligence || fetchedIntel
   const resolvedReturns = returnsAnalysis || fetchedReturns
+  const resolvedQuote = quote || fetchedQuote
+  const resolvedBars = chartBars.length > 0 ? chartBars : fetchedBars
+
+  const handleTimeframeChange = (tf) => {
+    setLocalTimeframe(tf)
+    if (onTimeframeChange) {
+      onTimeframeChange(tf)
+    } else if (instrument?.symbol) {
+      const days = tf === '1D' ? 1 : tf === '1W' ? 7 : tf === '1Y' || tf === 'ALL' ? 365 : 30
+      getHistoricalBars(instrument.symbol, days, '1d')
+        .then((res) => {
+          if (res?.data) setFetchedBars(res.data)
+        })
+        .catch(() => null)
+    }
+  }
 
   // Keyboard Escape listener to close modal
   useEffect(() => {
@@ -77,11 +112,11 @@ export function AssetDetailModal({
   if (!instrument) return null
 
   // Calculate pricing numbers
-  const currentPrice = Number(quote?.price ?? instrument.price ?? 0)
-  const low24h = quote?.low ? Number(quote.low) : currentPrice * 0.985
-  const high24h = quote?.high ? Number(quote.high) : currentPrice * 1.015
-  const prevClose = quote?.previous_close ? Number(quote.previous_close) : null
-  const openPrice = quote?.open ? Number(quote.open) : null
+  const currentPrice = Number(resolvedQuote?.price ?? instrument.price ?? 0)
+  const low24h = resolvedQuote?.low ? Number(resolvedQuote.low) : currentPrice * 0.985
+  const high24h = resolvedQuote?.high ? Number(resolvedQuote.high) : currentPrice * 1.015
+  const prevClose = resolvedQuote?.previous_close ? Number(resolvedQuote.previous_close) : null
+  const openPrice = resolvedQuote?.open ? Number(resolvedQuote.open) : null
 
   // Calculate position within 24h range (0 to 100%)
   const rangeSpan = high24h - low24h
@@ -475,13 +510,13 @@ export function AssetDetailModal({
         {(activeTab === 'comprehensive' || activeTab === 'chart') && (
           <PriceChart
             id={`detail-chart-${instrument.symbol}`}
-            data={chartBars}
+            data={resolvedBars}
             indicators={indicators}
             symbol={instrument.symbol}
-            currency={quote?.currency || 'USD'}
+            currency={resolvedQuote?.currency || 'USD'}
             isLoading={isLoading}
-            timeframe={chartTimeframe}
-            onTimeframeChange={onTimeframeChange}
+            timeframe={localTimeframe}
+            onTimeframeChange={handleTimeframeChange}
             height={340}
           />
         )}

@@ -17,6 +17,7 @@ import {
   getIndicatorSeries,
   getReturnsAnalysis,
 } from '../api/analytics'
+import { highlightMatch } from '../utils/highlight'
 
 const DEFAULT_INSTRUMENTS = [
   { symbol: 'AAPL', name: 'Apple Inc.', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 185.50, change: '+0.87%', isUp: true, volume: '52.4M' },
@@ -380,29 +381,94 @@ export function MarketsPage({ externalSearch = '' }) {
         subtitle="Click any instrument to open interactive price chart & market intelligence"
         action={
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              id="cf-markets-filter-input"
-              type="text"
-              placeholder="Search symbol or name..."
-              value={localSearch}
-              onChange={(e) => setLocalSearch(e.target.value)}
-              style={{
-                background: 'var(--cf-bg-base)',
-                border: '1px solid var(--cf-border)',
-                borderRadius: 'var(--cf-radius-md)',
-                padding: '6px 12px',
-                color: 'var(--cf-text-primary)',
-                fontSize: '12px',
-                outline: 'none',
-                width: '180px',
-              }}
-            />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                id="cf-markets-filter-input"
+                type="text"
+                placeholder="Search symbol or name..."
+                value={localSearch}
+                onChange={(e) => setLocalSearch(e.target.value)}
+                style={{
+                  background: 'var(--cf-bg-base)',
+                  border: '1px solid var(--cf-border)',
+                  borderRadius: 'var(--cf-radius-md)',
+                  padding: '6px 28px 6px 12px',
+                  color: 'var(--cf-text-primary)',
+                  fontSize: '12px',
+                  outline: 'none',
+                  width: '200px',
+                }}
+              />
+              {localSearch && (
+                <button
+                  type="button"
+                  id="cf-markets-clear-search-btn"
+                  onClick={() => setLocalSearch('')}
+                  aria-label="Clear table search filter"
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--cf-text-muted)',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    padding: 0,
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {activeSearch && (
+              <Badge variant="brand" size="sm">
+                Filter: &ldquo;{activeSearch}&rdquo;
+              </Badge>
+            )}
           </div>
         }
       >
         {filteredInstruments.length === 0 ? (
-          <div style={{ padding: 'var(--cf-space-8)', textAlign: 'center', color: 'var(--cf-text-muted)' }}>
-            No instruments match the current filter or search criteria.
+          <div
+            id="cf-markets-empty-state"
+            style={{
+              padding: 'var(--cf-space-8) var(--cf-space-4)',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 'var(--cf-space-3)',
+            }}
+          >
+            <div style={{ fontSize: '32px', color: 'var(--cf-text-muted)' }}>🔍</div>
+            <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cf-text-primary)' }}>
+              No instruments found matching &ldquo;{activeSearch}&rdquo;
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--cf-text-secondary)', maxWidth: '420px' }}>
+              No assets in the catalog match your query under category &ldquo;{selectedCategory}&rdquo;. Try resetting the filters or searching for symbols like AAPL, BTC-USD, SPY.
+            </div>
+            <button
+              type="button"
+              id="cf-markets-reset-btn"
+              onClick={() => {
+                setLocalSearch('')
+                setSelectedCategory('all')
+              }}
+              style={{
+                marginTop: '8px',
+                background: 'var(--cf-brand-primary)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 'var(--cf-radius-md)',
+                padding: '8px 16px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'opacity var(--cf-transition-fast)',
+              }}
+            >
+              Reset Filters & Show All Assets
+            </button>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -434,10 +500,10 @@ export function MarketsPage({ externalSearch = '' }) {
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
                     <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--cf-brand-cyan)' }}>
-                      {inst.symbol}
+                      {highlightMatch(inst.symbol, activeSearch)}
                     </td>
                     <td style={{ padding: '14px 16px', color: 'var(--cf-text-secondary)' }}>
-                      {inst.name}
+                      {highlightMatch(inst.name, activeSearch)}
                     </td>
                     <td style={{ padding: '14px 16px' }}>
                       <Badge variant={inst.assetType === 'crypto' ? 'brand' : inst.assetType === 'etf' ? 'warning' : 'neutral'} size="sm">

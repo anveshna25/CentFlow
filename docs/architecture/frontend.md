@@ -56,9 +56,12 @@ frontend/
     │   ├── WatchlistsPage.jsx  # Watchlist curation & asset monitoring cards
     │   └── PortfoliosPage.jsx  # Portfolio holdings, valuations & return metrics
     │
-    └── state/                  # State & navigation context
-        ├── pages.js            # Canonical page route constants
-        └── NavigationContext.jsx # SPA navigation provider & useNavigation hook
+    ├── state/                  # State & navigation context
+    │   ├── pages.js            # Canonical page route constants
+    │   └── NavigationContext.jsx # SPA navigation provider & useNavigation hook
+    │
+    └── utils/                  # Cross-cutting UI utilities
+        └── highlight.jsx       # Substring match highlighting for financial search
 ```
 
 ---
@@ -131,6 +134,19 @@ The [`AssetDetailModal`](../../frontend/src/components/market/AssetDetailModal.j
   - Multi-segment trend posture distribution track (Bullish vs. Neutral vs. Bearish percentages).
   - Consensus factor score meter (0–100) and regime classification.
   - Volatility regime dispersion counts (Normal, Low, High, Extreme).
+
+### 4.5 Global Asset Search & Discovery (`Header.jsx`, `highlight.jsx`)
+
+CentFlow provides a unified, cross-platform asset search and discovery engine:
+- **Instant Debounced Search:** Asynchronously queries `GET /api/v1/market-data/instruments?q=...` with a 250ms debounce threshold and local fallback cache support.
+- **Autocomplete Results Dropdown:**
+  - Dynamic result counter and navigation tips.
+  - Formatted instrument rows featuring bold ticker symbols, entity names, asset type badges (`EQUITY`, `CRYPTO`, `ETF`), and listing venues (`NASDAQ`, `Coinbase`, `NYSE`).
+  - Substring search highlighting via [`highlightMatch`](../../frontend/src/utils/highlight.jsx).
+- **Pro-Trader Keyboard Navigation:** Full `ArrowUp` / `ArrowDown` selection cycling, `Enter` to inspect highlighted asset, and `Escape` to dismiss.
+- **Global Hotkey:** `Ctrl+K` (or `⌘+K` / `/`) immediately focuses the global search bar from anywhere across the product.
+- **Universal Asset Inspection:** Selecting an instrument from the search dropdown smoothly opens the comprehensive [`AssetDetailModal`](../../frontend/src/components/market/AssetDetailModal.jsx) as an overlay from any page without losing navigation state.
+- **Catalog Search & Empty States:** The [`MarketsPage`](../../frontend/src/pages/MarketsPage.jsx) directory features synchronized external search, category pills (`all`, `equity`, `crypto`, `etf`), substring highlighting, and informative empty search states with one-click filter reset.
 
 ---
 
