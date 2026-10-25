@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 
 class CalculationPeriod(str, Enum):
@@ -100,3 +100,50 @@ class BollingerBandsResult:
     window: int = 20
     num_std: Decimal = Decimal("2.0")
     timestamps: Optional[list[datetime]] = None
+
+
+class TrendPosture(str, Enum):
+    """Directional trend alignment classification."""
+
+    BULLISH = "bullish"
+    MODERATELY_BULLISH = "moderately_bullish"
+    NEUTRAL = "neutral"
+    MODERATELY_BEARISH = "moderately_bearish"
+    BEARISH = "bearish"
+    GOLDEN_CROSS = "golden_cross"
+    DEATH_CROSS = "death_cross"
+
+
+class MomentumState(str, Enum):
+    """Oscillator and momentum classification."""
+
+    OVERBOUGHT = "overbought"
+    BULLISH_MOMENTUM = "bullish_momentum"
+    NEUTRAL = "neutral"
+    BEARISH_MOMENTUM = "bearish_momentum"
+    OVERSOLD = "oversold"
+
+
+class VolatilityRegime(str, Enum):
+    """Return dispersion and volatility regime classification."""
+
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    EXTREME = "extreme"
+
+
+@dataclass(frozen=True)
+class MarketIntelligenceSummary:
+    """Comprehensive, explainable technical intelligence report for an instrument."""
+
+    symbol: str
+    current_price: Decimal
+    trend_posture: TrendPosture
+    momentum_state: MomentumState
+    volatility_regime: VolatilityRegime
+    composite_score: int
+    summary_verdict: str
+    rationales: list[str]
+    as_of: Optional[datetime] = None
+    metrics: Optional[dict[str, Any]] = None
