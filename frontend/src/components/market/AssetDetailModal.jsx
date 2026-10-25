@@ -32,6 +32,8 @@ export function AssetDetailModal({
   onPersistQuote,
   onBackfillBars,
   actionFeedback = null,
+  isInWatchlist = false,
+  onToggleWatchlist,
 }) {
   const { navigate } = useNavigation()
   const [activeTab, setActiveTab] = useState('comprehensive') // 'comprehensive' | 'chart' | 'intelligence' | 'profile'
@@ -126,8 +128,12 @@ export function AssetDetailModal({
   const isUp = instrument.isUp ?? (!String(changeText).startsWith('-'))
 
   const handleAddToWatchlist = () => {
-    setWatchlistAdded(true)
-    setTimeout(() => setWatchlistAdded(false), 3000)
+    if (onToggleWatchlist) {
+      onToggleWatchlist()
+    } else {
+      setWatchlistAdded(true)
+      setTimeout(() => setWatchlistAdded(false), 3000)
+    }
   }
 
   const handleAddToPortfolio = () => {
@@ -200,9 +206,9 @@ export function AssetDetailModal({
               id="cf-btn-add-watchlist"
               onClick={handleAddToWatchlist}
               style={{
-                background: watchlistAdded ? 'var(--cf-bullish-bg)' : 'var(--cf-bg-surface-elevated)',
-                color: watchlistAdded ? 'var(--cf-bullish)' : 'var(--cf-text-primary)',
-                border: `1px solid ${watchlistAdded ? 'var(--cf-bullish-border)' : 'var(--cf-border)'}`,
+                background: isInWatchlist || watchlistAdded ? 'var(--cf-bullish-bg)' : 'var(--cf-bg-surface-elevated)',
+                color: isInWatchlist || watchlistAdded ? 'var(--cf-bullish)' : 'var(--cf-text-primary)',
+                border: `1px solid ${isInWatchlist || watchlistAdded ? 'var(--cf-bullish-border)' : 'var(--cf-border)'}`,
                 borderRadius: 'var(--cf-radius-md)',
                 padding: '7px 12px',
                 fontSize: '12px',
@@ -214,7 +220,7 @@ export function AssetDetailModal({
                 transition: 'all var(--cf-transition-fast)',
               }}
             >
-              <span>{watchlistAdded ? '✓ Added to Watchlist' : '+ Watchlist'}</span>
+              <span>{isInWatchlist ? '★ In Watchlist' : watchlistAdded ? '✓ Added to Watchlist' : '+ Watchlist'}</span>
             </button>
 
             <button
