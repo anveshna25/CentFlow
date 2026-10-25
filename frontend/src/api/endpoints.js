@@ -26,6 +26,10 @@ export const ENDPOINTS = {
   WATCHLIST_ITEMS: (id) => `/api/v1/watchlists/${encodeURIComponent(id)}/items`,
   WATCHLIST_ITEM: (id, symbol) => `/api/v1/watchlists/${encodeURIComponent(id)}/items/${encodeURIComponent(symbol)}`,
   PORTFOLIOS: '/api/v1/portfolios',
+  PORTFOLIO_DETAIL: (portfolioId) => `/api/v1/portfolios/${encodeURIComponent(portfolioId)}`,
+  PORTFOLIO_POSITIONS: (portfolioId) => `/api/v1/portfolios/${encodeURIComponent(portfolioId)}/positions`,
+  PORTFOLIO_POSITION_DELETE: (portfolioId, positionId) =>
+    `/api/v1/portfolios/${encodeURIComponent(portfolioId)}/positions/${encodeURIComponent(positionId)}`,
   ANALYTICS_SUMMARY: (symbol, lookbackDays = 365, interval = '1d') =>
     `/api/v1/analytics/summary/${encodeURIComponent(symbol)}?lookback_days=${lookbackDays}&interval=${interval}`,
   ANALYTICS_INDICATORS: (symbol, lookbackDays = 365, interval = '1d', params = {}) => {

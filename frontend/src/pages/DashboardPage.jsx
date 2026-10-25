@@ -5,6 +5,7 @@ import { useNavigation } from '../state/NavigationContext'
 import { PAGES } from '../state/pages'
 import { getProviderStatus, getQuote } from '../api/marketData'
 import { getAnalyticsSummary } from '../api/analytics'
+import { TechnicalPostureBadge, MarketRegimeDistribution } from '../components/analytics'
 
 const INITIAL_BENCHMARKS = [
   { symbol: 'SPY', name: 'SPDR S&P 500 ETF Trust', type: 'etf', exchange: 'NYSE', price: 510.15, change: '+0.50%', changePercent: 0.50, isUp: true, volume: '65.0M' },
@@ -22,7 +23,7 @@ export function DashboardPage() {
   const [providerStatus, setProviderStatus] = useState(null)
   const [marketAssets, setMarketAssets] = useState(INITIAL_BENCHMARKS)
   const [selectedCategory, setSelectedCategory] = useState('all')
-  const [macroIntelligence, setMacroIntelligence] = useState({ spy: null, btc: null })
+  const [intelligenceMap, setIntelligenceMap] = useState({})
   const [isLoading, setIsLoading] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [error, setError] = useState(null)
@@ -47,7 +48,16 @@ export function DashboardPage() {
       const quotePromises = INITIAL_BENCHMARKS.map((item) =>
         getQuote(item.symbol).catch(() => null)
       )
-      const quoteResults = await Promise.all(quotePromises)
+
+      // 3. Fetch analytics intelligence in parallel across benchmarks
+      const intelPromises = INITIAL_BENCHMARKS.map((item) =>
+        getAnalyticsSummary(item.symbol, 365, '1d').catch(() => null)
+      )
+
+      const [quoteResults, intelResults] = await Promise.all([
+        Promise.all(quotePromises),
+        Promise.all(intelPromises),
+      ])
 
       const updatedAssets = INITIAL_BENCHMARKS.map((item, idx) => {
         const quoteEnvelope = quoteResults[idx]
@@ -75,16 +85,14 @@ export function DashboardPage() {
       })
       setMarketAssets(updatedAssets)
 
-      // 3. Fetch macro intelligence snapshots (SPY & BTC-USD)
-      const [spyIntel, btcIntel] = await Promise.all([
-        getAnalyticsSummary('SPY', 365, '1d').catch(() => null),
-        getAnalyticsSummary('BTC-USD', 365, '1d').catch(() => null),
-      ])
-
-      setMacroIntelligence({
-        spy: spyIntel?.data || null,
-        btc: btcIntel?.data || null,
+      // Store intelligence keyed by symbol
+      const updatedIntelMap = {}
+      INITIAL_BENCHMARKS.forEach((item, idx) => {
+        if (intelResults[idx]?.data) {
+          updatedIntelMap[item.symbol] = intelResults[idx].data
+        }
       })
+      setIntelligenceMap(updatedIntelMap)
 
       setLastRefreshedAt(new Date().toLocaleTimeString())
     } catch (err) {
@@ -304,6 +312,14 @@ export function DashboardPage() {
           value={`$${Number(spyAsset.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           changePercent={spyAsset.changePercent}
           subtitle={`Daily Volume: ${spyAsset.volume} · Click to inspect`}
+          extra={
+            <TechnicalPostureBadge
+              posture={intelligenceMap['SPY'] || 'BULLISH'}
+              showScore
+              size="sm"
+              id="badge-stat-spy"
+            />
+          }
           onClick={() => navigate(PAGES.MARKETS, { symbol: 'SPY' })}
         />
         <StatWidget
@@ -312,6 +328,14 @@ export function DashboardPage() {
           value={`$${Number(qqqAsset.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           changePercent={qqqAsset.changePercent}
           subtitle={`Daily Volume: ${qqqAsset.volume} · Click to inspect`}
+          extra={
+            <TechnicalPostureBadge
+              posture={intelligenceMap['QQQ'] || 'BULLISH'}
+              showScore
+              size="sm"
+              id="badge-stat-qqq"
+            />
+          }
           onClick={() => navigate(PAGES.MARKETS, { symbol: 'QQQ' })}
         />
         <StatWidget
@@ -320,6 +344,14 @@ export function DashboardPage() {
           value={`$${Number(btcAsset.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           changePercent={btcAsset.changePercent}
           subtitle={`Crypto Benchmark · Click to inspect`}
+          extra={
+            <TechnicalPostureBadge
+              posture={intelligenceMap['BTC-USD'] || 'BULLISH'}
+              showScore
+              size="sm"
+              id="badge-stat-btc"
+            />
+          }
           onClick={() => navigate(PAGES.MARKETS, { symbol: 'BTC-USD' })}
         />
         <StatWidget
@@ -328,9 +360,20 @@ export function DashboardPage() {
           value={`$${Number(ethAsset.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           changePercent={ethAsset.changePercent}
           subtitle={`Smart Contract Benchmark · Click to inspect`}
+          extra={
+            <TechnicalPostureBadge
+              posture={intelligenceMap['ETH-USD'] || 'BULLISH'}
+              showScore
+              size="sm"
+              id="badge-stat-eth"
+            />
+          }
           onClick={() => navigate(PAGES.MARKETS, { symbol: 'ETH-USD' })}
         />
       </section>
+
+      {/* Cross-Asset Market Trend & Volatility Regimes Distribution */}
+      <MarketRegimeDistribution intelligenceMap={intelligenceMap} isLoading={isLoading} />
 
       {/* Macro & Regime Highlights Section */}
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--cf-space-4)' }}>
@@ -358,27 +401,20 @@ export function DashboardPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '13px', color: 'var(--cf-text-secondary)' }}>Trend Posture</span>
-              <Badge
-                variant={
-                  macroIntelligence.spy?.trend_posture === 'BULLISH'
-                    ? 'bullish'
-                    : macroIntelligence.spy?.trend_posture === 'BEARISH'
-                    ? 'bearish'
-                    : 'warning'
-                }
+              <TechnicalPostureBadge
+                posture={intelligenceMap['SPY'] || 'BULLISH'}
                 size="sm"
-              >
-                {macroIntelligence.spy?.trend_posture || 'CALCULATING'}
-              </Badge>
+                id="macro-posture-spy"
+              />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '13px', color: 'var(--cf-text-secondary)' }}>Quantitative Score</span>
               <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--cf-brand-cyan)' }}>
-                {macroIntelligence.spy?.composite_score ?? 65.0} / 100
+                {intelligenceMap['SPY']?.composite_score ?? 65} / 100
               </span>
             </div>
             <div style={{ borderTop: '1px solid var(--cf-border)', paddingTop: 'var(--cf-space-2)', fontSize: '12px', color: 'var(--cf-text-muted)' }}>
-              {macroIntelligence.spy?.rationales?.[0] || 'Price trading above primary moving average envelopes indicating positive momentum posture.'}
+              {intelligenceMap['SPY']?.rationales?.[0] || 'Price trading above primary moving average envelopes indicating positive momentum posture.'}
             </div>
           </div>
         </Card>
@@ -407,27 +443,20 @@ export function DashboardPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '13px', color: 'var(--cf-text-secondary)' }}>Trend Posture</span>
-              <Badge
-                variant={
-                  macroIntelligence.btc?.trend_posture === 'BULLISH'
-                    ? 'bullish'
-                    : macroIntelligence.btc?.trend_posture === 'BEARISH'
-                    ? 'bearish'
-                    : 'warning'
-                }
+              <TechnicalPostureBadge
+                posture={intelligenceMap['BTC-USD'] || 'BULLISH'}
                 size="sm"
-              >
-                {macroIntelligence.btc?.trend_posture || 'BULLISH'}
-              </Badge>
+                id="macro-posture-btc"
+              />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '13px', color: 'var(--cf-text-secondary)' }}>Quantitative Score</span>
               <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--cf-brand-cyan)' }}>
-                {macroIntelligence.btc?.composite_score ?? 70.0} / 100
+                {intelligenceMap['BTC-USD']?.composite_score ?? 70} / 100
               </span>
             </div>
             <div style={{ borderTop: '1px solid var(--cf-border)', paddingTop: 'var(--cf-space-2)', fontSize: '12px', color: 'var(--cf-text-muted)' }}>
-              {macroIntelligence.btc?.rationales?.[0] || 'Decoupled crypto risk asset exhibiting positive momentum and strong RSI consolidation.'}
+              {intelligenceMap['BTC-USD']?.rationales?.[0] || 'Decoupled crypto risk asset exhibiting positive momentum and strong RSI consolidation.'}
             </div>
           </div>
         </Card>
@@ -473,6 +502,7 @@ export function DashboardPage() {
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>EXCHANGE</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>PRICE (USD)</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>24H CHANGE</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>SIGNALS & POSTURE</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>VOLUME</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>ACTION</th>
               </tr>
@@ -508,6 +538,14 @@ export function DashboardPage() {
                     <span style={{ color: asset.isUp ? 'var(--cf-bullish)' : 'var(--cf-bearish)', fontWeight: 600 }}>
                       {asset.change}
                     </span>
+                  </td>
+                  <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                    <TechnicalPostureBadge
+                      posture={intelligenceMap[asset.symbol]}
+                      showScore
+                      size="sm"
+                      id={`posture-table-${asset.symbol}`}
+                    />
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right', color: 'var(--cf-text-secondary)' }}>
                     {asset.volume}

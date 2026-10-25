@@ -5,6 +5,7 @@ export function StatWidget({
   value,
   changePercent,
   subtitle,
+  extra,
   id,
   onClick,
 }) {
@@ -79,6 +80,12 @@ export function StatWidget({
         >
           {subtitle}
         </span>
+      )}
+
+      {extra && (
+        <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {extra}
+        </div>
       )}
     </div>
   )

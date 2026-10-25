@@ -1,7 +1,7 @@
 import { Header } from '../components/layout/Header'
 import { Sidebar } from '../components/layout/Sidebar'
 
-export function AppLayout({ children, onSearch, searchValue }) {
+export function AppLayout({ children, onSearch, searchValue, onSelectAsset }) {
   return (
     <div
       id="cf-app-shell"
@@ -20,7 +20,7 @@ export function AppLayout({ children, onSearch, searchValue }) {
           minWidth: 0,
         }}
       >
-        <Header onSearch={onSearch} searchValue={searchValue} />
+        <Header onSearch={onSearch} searchValue={searchValue} onSelectAsset={onSelectAsset} />
         <main
           id="cf-main-content"
           style={{
