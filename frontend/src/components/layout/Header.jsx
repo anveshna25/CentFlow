@@ -47,14 +47,18 @@ export function Header({ onSearch, searchValue = '', onSelectAsset }) {
       try {
         const res = await searchInstruments(trimmed)
         if (res?.data && res.data.length > 0) {
-          const normalized = res.data.map((item) => ({
-            symbol: item.symbol,
-            name: item.name,
-            assetType: item.asset_type || item.assetType || 'equity',
-            exchange: item.exchange || 'N/A',
-            market: item.market || 'Global',
-            currency: item.currency || 'USD',
-          }))
+          const normalized = res.data.map((item) => {
+            const rawType = item.asset_type || item.assetType || 'equity'
+            const normType = rawType.toLowerCase() === 'cryptocurrency' ? 'crypto' : rawType.toLowerCase()
+            return {
+              symbol: item.symbol,
+              name: item.name,
+              assetType: normType,
+              exchange: item.exchange || 'N/A',
+              market: item.market || 'Global',
+              currency: item.currency || 'USD',
+            }
+          })
           setResults(normalized)
         } else {
           // If backend returns empty, filter fallback catalog

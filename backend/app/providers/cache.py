@@ -195,18 +195,33 @@ class CachedMarketDataProvider(BaseMarketDataProvider):
                     pass
             raise
 
-    async def search_instruments(self, query: str) -> Sequence[ProviderInstrument]:
+    async def search_instruments(
+        self,
+        query: str = "",
+        asset_type: Optional[str] = None,
+    ) -> Sequence[ProviderInstrument]:
         """Fetch instrument search results with long-lived TTL caching."""
-        clean_query = query.strip().lower()
-        if not clean_query:
-            return []
-        if not self._enabled:
-            return await self._provider.search_instruments(clean_query)
+        clean_query = (query or "").strip().lower()
+        clean_type = (asset_type or "").strip().lower()
+        if clean_type == "all":
+            clean_type = ""
 
-        cache_key = f"search:{clean_query}"
+        if not clean_query and not clean_type:
+            return []
+
+        async def _call_provider() -> Sequence[ProviderInstrument]:
+            try:
+                return await self._provider.search_instruments(clean_query, asset_type=asset_type)
+            except TypeError:
+                return await self._provider.search_instruments(clean_query)
+
+        if not self._enabled:
+            return await _call_provider()
+
+        cache_key = f"search:{clean_query}:{clean_type}"
         return await self._cache.get_or_set(
             key=cache_key,
-            factory=lambda: self._provider.search_instruments(clean_query),
+            factory=_call_provider,
             ttl_seconds=self._search_ttl,
             stale_ttl_seconds=self._stale_grace_ttl,
             fallback_on_error=True,
