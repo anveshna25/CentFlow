@@ -48,6 +48,15 @@ class MarketDataService:
         """The active market data provider instance."""
         return self._provider
 
+    @property
+    def capabilities(self):
+        """Operational capabilities declared by active market data provider."""
+        return self._provider.capabilities
+
+    async def close(self) -> None:
+        """Close provider resources."""
+        await self._provider.close()
+
     def get_cache_stats(self) -> Optional[dict[str, Any]]:
         """Retrieve cache performance statistics if caching layer is active."""
         if isinstance(self._provider, CachedMarketDataProvider):

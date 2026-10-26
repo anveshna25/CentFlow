@@ -6,6 +6,7 @@ from app.core.cache import AsyncMemoryCache
 from app.providers.base import (
     BaseMarketDataProvider,
     ProviderBar,
+    ProviderCapabilities,
     ProviderInstrument,
     ProviderQuote,
     ProviderStatus,
@@ -37,6 +38,11 @@ class CachedMarketDataProvider(BaseMarketDataProvider):
     def name(self) -> str:
         """Name of the wrapped underlying provider."""
         return self._provider.name
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        """Operational capabilities inherited from underlying provider."""
+        return self._provider.capabilities
 
     @property
     def underlying_provider(self) -> BaseMarketDataProvider:
@@ -125,3 +131,7 @@ class CachedMarketDataProvider(BaseMarketDataProvider):
     async def get_status(self) -> ProviderStatus:
         """Check status of underlying provider without caching (live bypass)."""
         return await self._provider.get_status()
+
+    async def close(self) -> None:
+        """Close underlying provider resources."""
+        await self._provider.close()

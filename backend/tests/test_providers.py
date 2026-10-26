@@ -2,11 +2,21 @@ import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.core.errors import CentFlowException, InstrumentNotFoundError
+from app.core.errors import (
+    CentFlowException,
+    InstrumentNotFoundError,
+    ProviderAuthenticationError,
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 from app.domain.models import Asset, Instrument
 from app.providers.base import (
     BaseMarketDataProvider,
     ProviderBar,
+    ProviderCapabilities,
     ProviderInstrument,
     ProviderQuote,
     ProviderStatus,
@@ -28,6 +38,41 @@ class TestMockMarketDataProvider(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status.name, "mock")
         self.assertTrue(status.is_active)
         self.assertIn("operational", status.message.lower())
+        self.assertIsNotNone(status.latency_ms)
+        self.assertGreater(status.latency_ms, 0)
+        self.assertIsNotNone(status.capabilities)
+
+    def test_provider_capabilities(self):
+        caps = self.provider.capabilities
+        self.assertIsInstance(caps, ProviderCapabilities)
+        self.assertIn("1d", caps.supported_intervals)
+        self.assertTrue(caps.supports_search)
+        self.assertTrue(caps.supports_realtime)
+        self.assertFalse(caps.is_delayed)
+        self.assertEqual(caps.delay_minutes, 0)
+
+    async def test_provider_async_context_manager(self):
+        async with MockMarketDataProvider() as provider:
+            self.assertEqual(provider.name, "mock")
+            quote = await provider.get_quote("AAPL")
+            self.assertEqual(quote.symbol, "AAPL")
+
+    async def test_simulated_error_injection_and_clearing(self):
+        self.provider.simulate_error(ProviderRateLimitError("mock", "Test simulated rate limit"))
+        with self.assertRaises(ProviderRateLimitError):
+            await self.provider.get_quote("AAPL")
+        with self.assertRaises(ProviderRateLimitError):
+            await self.provider.get_status()
+        with self.assertRaises(ProviderRateLimitError):
+            await self.provider.search_instruments("aapl")
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 1, 3, tzinfo=timezone.utc)
+        with self.assertRaises(ProviderRateLimitError):
+            await self.provider.get_historical_bars("AAPL", start, end)
+
+        self.provider.clear_simulated_error()
+        quote = await self.provider.get_quote("AAPL")
+        self.assertEqual(quote.symbol, "AAPL")
 
     async def test_get_quote_valid_symbol(self):
         quote = await self.provider.get_quote("AAPL")
@@ -180,6 +225,46 @@ class TestMarketDataService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(price_model.value, Decimal("185.50"))
         self.assertEqual(price_model.currency, "USD")
         self.assertEqual(price_model.timestamp, quote.timestamp)
+
+    def test_service_capabilities(self):
+        caps = self.service.capabilities
+        self.assertIsInstance(caps, ProviderCapabilities)
+        self.assertIn("1d", caps.supported_intervals)
+
+
+class TestProviderErrorTaxonomy(unittest.TestCase):
+    """Test market data provider error hierarchy and attributes."""
+
+    def test_provider_error_inheritance(self):
+        self.assertTrue(issubclass(ProviderUnavailableError, ProviderError))
+        self.assertTrue(issubclass(ProviderTimeoutError, ProviderUnavailableError))
+        self.assertTrue(issubclass(ProviderTimeoutError, ProviderError))
+        self.assertTrue(issubclass(ProviderRateLimitError, ProviderError))
+        self.assertTrue(issubclass(ProviderResponseError, ProviderUnavailableError))
+        self.assertTrue(issubclass(ProviderAuthenticationError, ProviderError))
+
+    def test_provider_rate_limit_error_attributes(self):
+        err = ProviderRateLimitError("test_provider", "Rate exceeded", retry_after=60)
+        self.assertEqual(err.code, "PROVIDER_RATE_LIMIT")
+        self.assertEqual(err.status_code, 429)
+        self.assertEqual(err.details[0]["provider"], "test_provider")
+        self.assertEqual(err.details[0]["retry_after"], 60)
+
+    def test_provider_timeout_error_attributes(self):
+        err = ProviderTimeoutError("test_provider")
+        self.assertEqual(err.code, "PROVIDER_TIMEOUT")
+        self.assertEqual(err.status_code, 504)
+        self.assertIn("timed out", err.message)
+
+    def test_provider_response_error_attributes(self):
+        err = ProviderResponseError("test_provider", "Corrupt payload")
+        self.assertEqual(err.code, "PROVIDER_RESPONSE_ERROR")
+        self.assertEqual(err.status_code, 502)
+
+    def test_provider_authentication_error_attributes(self):
+        err = ProviderAuthenticationError("test_provider", "Invalid API key")
+        self.assertEqual(err.code, "PROVIDER_AUTHENTICATION_ERROR")
+        self.assertEqual(err.status_code, 502)
 
 
 if __name__ == "__main__":

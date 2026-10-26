@@ -3,7 +3,18 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
+
+
+@dataclass(frozen=True)
+class ProviderCapabilities:
+    """Operational and functional capabilities declared by a market data provider."""
+
+    supported_intervals: tuple[str, ...] = ("1d",)
+    supports_search: bool = True
+    supports_realtime: bool = True
+    is_delayed: bool = False
+    delay_minutes: int = 0
 
 
 @dataclass(frozen=True)
@@ -55,6 +66,8 @@ class ProviderStatus:
     name: str
     is_active: bool
     message: Optional[str] = None
+    latency_ms: Optional[float] = None
+    capabilities: Optional[ProviderCapabilities] = None
 
 
 class BaseMarketDataProvider(ABC):
@@ -69,6 +82,11 @@ class BaseMarketDataProvider(ABC):
     def name(self) -> str:
         """Unique identifier of the provider (e.g. 'mock', 'yahoo', 'polygon')."""
         pass
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        """Operational capabilities declared by this market data provider."""
+        return ProviderCapabilities()
 
     @abstractmethod
     async def get_quote(self, symbol: str) -> ProviderQuote:
@@ -95,3 +113,15 @@ class BaseMarketDataProvider(ABC):
     async def get_status(self) -> ProviderStatus:
         """Check provider connectivity and health status."""
         pass
+
+    async def close(self) -> None:
+        """Close any persistent network connections, HTTP sessions, or resources."""
+        pass
+
+    async def __aenter__(self) -> "BaseMarketDataProvider":
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit with resource release."""
+        await self.close()

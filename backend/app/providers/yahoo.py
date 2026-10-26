@@ -6,10 +6,18 @@ from urllib.parse import quote_plus
 
 import httpx
 
-from app.core.errors import InstrumentNotFoundError, ProviderUnavailableError
+from app.core.errors import (
+    InstrumentNotFoundError,
+    ProviderAuthenticationError,
+    ProviderRateLimitError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 from app.providers.base import (
     BaseMarketDataProvider,
     ProviderBar,
+    ProviderCapabilities,
     ProviderInstrument,
     ProviderQuote,
     ProviderStatus,
@@ -42,6 +50,17 @@ class YahooMarketDataProvider(BaseMarketDataProvider):
         """Provider identifier."""
         return "yahoo"
 
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        """Operational capabilities declared for Yahoo Finance provider."""
+        return ProviderCapabilities(
+            supported_intervals=("1d", "1wk", "1mo", "1h", "5m"),
+            supports_search=True,
+            supports_realtime=False,
+            is_delayed=True,
+            delay_minutes=15,
+        )
+
     def _get_client(self) -> httpx.AsyncClient:
         """Retrieve existing client or instantiate internal client."""
         if self._external_client is not None:
@@ -73,11 +92,17 @@ class YahooMarketDataProvider(BaseMarketDataProvider):
 
         try:
             response = await client.get(url)
+        except httpx.TimeoutException as exc:
+            raise ProviderTimeoutError("yahoo", f"Request timed out contacting Yahoo Finance: {exc}") from exc
         except httpx.RequestError as exc:
             raise ProviderUnavailableError("yahoo", f"Network error contacting Yahoo Finance: {exc}") from exc
 
         if response.status_code == 404:
             raise InstrumentNotFoundError(clean_symbol)
+        if response.status_code == 429:
+            raise ProviderRateLimitError("yahoo", "Yahoo Finance rate limit exceeded (HTTP 429)")
+        if response.status_code in (401, 403):
+            raise ProviderAuthenticationError("yahoo", f"Yahoo Finance access denied: HTTP {response.status_code}")
         if response.status_code != 200:
             raise ProviderUnavailableError("yahoo", f"Yahoo Finance returned HTTP {response.status_code}")
 
@@ -144,7 +169,7 @@ class YahooMarketDataProvider(BaseMarketDataProvider):
                 change_percent=change_percent,
             )
         except (ValueError, KeyError, IndexError) as exc:
-            raise ProviderUnavailableError("yahoo", f"Malformed payload from Yahoo Finance: {exc}") from exc
+            raise ProviderResponseError("yahoo", f"Malformed payload from Yahoo Finance: {exc}") from exc
 
     async def get_historical_bars(
         self,
@@ -170,11 +195,17 @@ class YahooMarketDataProvider(BaseMarketDataProvider):
 
         try:
             response = await client.get(url)
+        except httpx.TimeoutException as exc:
+            raise ProviderTimeoutError("yahoo", f"Request timed out contacting Yahoo Finance: {exc}") from exc
         except httpx.RequestError as exc:
             raise ProviderUnavailableError("yahoo", f"Network error contacting Yahoo Finance: {exc}") from exc
 
         if response.status_code == 404:
             raise InstrumentNotFoundError(clean_symbol)
+        if response.status_code == 429:
+            raise ProviderRateLimitError("yahoo", "Yahoo Finance rate limit exceeded (HTTP 429)")
+        if response.status_code in (401, 403):
+            raise ProviderAuthenticationError("yahoo", f"Yahoo Finance access denied: HTTP {response.status_code}")
         if response.status_code != 200:
             raise ProviderUnavailableError("yahoo", f"Yahoo Finance returned HTTP {response.status_code}")
 
@@ -224,7 +255,7 @@ class YahooMarketDataProvider(BaseMarketDataProvider):
 
             return bars
         except (ValueError, KeyError, IndexError) as exc:
-            raise ProviderUnavailableError("yahoo", f"Malformed history payload from Yahoo Finance: {exc}") from exc
+            raise ProviderResponseError("yahoo", f"Malformed history payload from Yahoo Finance: {exc}") from exc
 
     async def search_instruments(self, query: str) -> Sequence[ProviderInstrument]:
         """Search instruments by ticker symbol or corporate name."""
@@ -237,9 +268,15 @@ class YahooMarketDataProvider(BaseMarketDataProvider):
 
         try:
             response = await client.get(url)
+        except httpx.TimeoutException as exc:
+            raise ProviderTimeoutError("yahoo", f"Request timed out searching Yahoo Finance: {exc}") from exc
         except httpx.RequestError as exc:
             raise ProviderUnavailableError("yahoo", f"Network error searching Yahoo Finance: {exc}") from exc
 
+        if response.status_code == 429:
+            raise ProviderRateLimitError("yahoo", "Yahoo Finance search rate limit exceeded (HTTP 429)")
+        if response.status_code in (401, 403):
+            raise ProviderAuthenticationError("yahoo", f"Yahoo Finance access denied: HTTP {response.status_code}")
         if response.status_code != 200:
             raise ProviderUnavailableError("yahoo", f"Yahoo search returned HTTP {response.status_code}")
 
@@ -280,12 +317,14 @@ class YahooMarketDataProvider(BaseMarketDataProvider):
 
             return instruments
         except (ValueError, KeyError) as exc:
-            raise ProviderUnavailableError("yahoo", f"Malformed search payload from Yahoo Finance: {exc}") from exc
+            raise ProviderResponseError("yahoo", f"Malformed search payload from Yahoo Finance: {exc}") from exc
 
     async def get_status(self) -> ProviderStatus:
-        """Check provider connectivity status."""
+        """Check provider connectivity status and return health report."""
         return ProviderStatus(
             name=self.name,
             is_active=True,
             message="Yahoo Finance Public Gateway operational.",
+            latency_ms=10.0,
+            capabilities=self.capabilities,
         )
