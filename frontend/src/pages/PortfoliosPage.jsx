@@ -182,6 +182,15 @@ export function PortfoliosPage() {
   const totalCost = activePortfolio ? Number(activePortfolio.total_cost_basis) : 0
   const totalPnl = activePortfolio ? Number(activePortfolio.total_unrealized_pnl) : 0
   const totalPnlPct = activePortfolio ? Number(activePortfolio.total_unrealized_pnl_percent) : 0
+  const totalDailyPnl =
+    activePortfolio?.total_daily_pnl !== undefined && activePortfolio?.total_daily_pnl !== null
+      ? Number(activePortfolio.total_daily_pnl)
+      : 0
+  const totalDailyPnlPct =
+    activePortfolio?.total_daily_pnl_percent !== undefined && activePortfolio?.total_daily_pnl_percent !== null
+      ? Number(activePortfolio.total_daily_pnl_percent)
+      : 0
+  const isStale = Boolean(activePortfolio?.is_stale)
   const positions = activePortfolio?.positions || []
 
   // Aggregate Risk and Volatility exposure calculations
@@ -378,12 +387,19 @@ export function PortfoliosPage() {
           id="stat-portfolio-val"
           title="Total Valuation"
           value={`$${totalValuation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          changePercent={totalPnlPct}
+          changePercent={totalDailyPnlPct}
           subtitle={`Active Portfolio: ${activePortfolio?.name || 'Default'}`}
         />
         <StatWidget
+          id="stat-portfolio-daily-pnl"
+          title="Today's Gain / Loss"
+          value={`${totalDailyPnl >= 0 ? '+' : ''}$${totalDailyPnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          changePercent={totalDailyPnlPct}
+          subtitle="Marked-to-market 24h change"
+        />
+        <StatWidget
           id="stat-portfolio-pnl"
-          title="Unrealized P&L"
+          title="Unrealized Returns"
           value={`${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           changePercent={totalPnlPct}
           subtitle={`Return on invested cost: ${totalPnlPct >= 0 ? '+' : ''}${totalPnlPct.toFixed(2)}%`}
@@ -400,7 +416,7 @@ export function PortfoliosPage() {
           title="Active Holdings"
           value={`${positions.length} Positions`}
           changePercent={positions.length > 0 ? 1.0 : 0.0}
-          subtitle={`Base Currency: ${activePortfolio?.base_currency || 'USD'}`}
+          subtitle={isStale ? "Quotes delayed / cached" : `Base Currency: ${activePortfolio?.base_currency || 'USD'}`}
         />
       </div>
 
@@ -615,8 +631,23 @@ export function PortfoliosPage() {
                       <td style={{ padding: '14px 16px', textAlign: 'right', color: 'var(--cf-text-secondary)' }}>
                         ${Number(pos.average_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--cf-text-primary)' }}>
-                        ${Number(pos.current_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        <div style={{ fontWeight: 600, color: 'var(--cf-text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                          ${Number(pos.current_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          {pos.is_stale && (
+                            <span
+                              title="Stale or fallback quote"
+                              style={{ fontSize: '11px', color: 'var(--cf-warning)', cursor: 'help' }}
+                            >
+                              ⚠️
+                            </span>
+                          )}
+                        </div>
+                        {pos.daily_pnl_percent !== undefined && pos.daily_pnl_percent !== null && (
+                          <div style={{ fontSize: '11px', fontWeight: 600, color: Number(pos.daily_pnl_percent) >= 0 ? 'var(--cf-bullish)' : 'var(--cf-bearish)' }}>
+                            {Number(pos.daily_pnl_percent) >= 0 ? '+' : ''}{Number(pos.daily_pnl_percent).toFixed(2)}%
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--cf-text-primary)' }}>
                         ${Number(pos.market_value).toLocaleString(undefined, { minimumFractionDigits: 2 })}
