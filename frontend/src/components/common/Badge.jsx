@@ -6,27 +6,32 @@ export function Badge({
 }) {
   const variantStyles = {
     bullish: {
-      backgroundColor: 'var(--cf-bullish-bg)',
+      backgroundColor: 'var(--cf-bullish-subtle)',
       color: 'var(--cf-bullish)',
       borderColor: 'var(--cf-bullish-border)',
     },
     bearish: {
-      backgroundColor: 'var(--cf-bearish-bg)',
+      backgroundColor: 'var(--cf-bearish-subtle)',
       color: 'var(--cf-bearish)',
       borderColor: 'var(--cf-bearish-border)',
     },
     brand: {
-      backgroundColor: 'rgba(59, 130, 246, 0.14)',
+      backgroundColor: 'var(--cf-brand-subtle)',
       color: 'var(--cf-brand-primary)',
-      borderColor: 'rgba(59, 130, 246, 0.3)',
+      borderColor: 'var(--cf-brand-border)',
     },
     warning: {
-      backgroundColor: 'var(--cf-warning-bg)',
-      color: 'var(--cf-warning)',
+      backgroundColor: 'var(--cf-status-warning-subtle)',
+      color: 'var(--cf-status-warning)',
       borderColor: 'rgba(245, 158, 11, 0.3)',
     },
+    info: {
+      backgroundColor: 'var(--cf-status-info-subtle)',
+      color: 'var(--cf-status-info)',
+      borderColor: 'rgba(6, 182, 212, 0.3)',
+    },
     neutral: {
-      backgroundColor: 'rgba(255, 255, 255, 0.06)',
+      backgroundColor: 'var(--cf-neutral-subtle)',
       color: 'var(--cf-text-secondary)',
       borderColor: 'var(--cf-border)',
     },

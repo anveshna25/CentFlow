@@ -1,50 +1,118 @@
 /* ==========================================================================
-   CentFlow Design System & Foundation Tokens
+   CentFlow Design System & Semantic Foundation Tokens
+   Phase 7: Product Design System, UI/UX Maturity & Core Intelligence
    ========================================================================== */
 
-:root {
-  /* Color Palette — Backgrounds */
+:root,
+[data-theme="dark"] {
+  /* ------------------------------------------------------------------------
+     1. Background Surfaces (Dark Navy / Charcoal Hierarchy)
+     ------------------------------------------------------------------------ */
   --cf-bg-base: #0a0e17;
+  --cf-bg-sidebar: #0d131f;
+  --cf-bg-header: rgba(10, 14, 23, 0.85);
   --cf-bg-surface: #111827;
-  --cf-bg-surface-elevated: #1a2234;
+  --cf-bg-surface-elevated: #161f30;
   --cf-bg-surface-glass: rgba(17, 24, 39, 0.75);
-  --cf-bg-surface-hover: rgba(31, 41, 55, 0.65);
+  --cf-bg-surface-hover: rgba(26, 36, 54, 0.75);
   --cf-bg-surface-subtle: rgba(255, 255, 255, 0.03);
 
-  /* Borders & Dividers */
-  --cf-border: rgba(255, 255, 255, 0.08);
-  --cf-border-hover: rgba(255, 255, 255, 0.16);
-  --cf-border-focus: rgba(59, 130, 246, 0.6);
-
-  /* Typography Colors */
+  /* ------------------------------------------------------------------------
+     2. Typography Colors & Contrast
+     ------------------------------------------------------------------------ */
   --cf-text-primary: #f8fafc;
   --cf-text-secondary: #94a3b8;
   --cf-text-muted: #64748b;
+  --cf-text-disabled: #475569;
   --cf-text-inverse: #0a0e17;
 
-  /* Brand & Accents */
-  --cf-brand-primary: #3b82f6;
-  --cf-brand-primary-hover: #2563eb;
-  --cf-brand-secondary: #8b5cf6;
+  /* ------------------------------------------------------------------------
+     3. Brand Accent — CentFlow Emerald Green
+     ------------------------------------------------------------------------ */
+  --cf-brand-primary: #10b981;
+  --cf-brand-primary-hover: #059669;
+  --cf-brand-primary-active: #047857;
+  --cf-brand-subtle: rgba(16, 185, 129, 0.12);
+  --cf-brand-border: rgba(16, 185, 129, 0.28);
+  --cf-brand-glow: 0 0 24px rgba(16, 185, 129, 0.2);
+  --cf-brand-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
   --cf-brand-cyan: #06b6d4;
-  --cf-brand-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-  --cf-brand-glow: 0 0 24px rgba(59, 130, 246, 0.25);
+  --cf-brand-purple: #8b5cf6;
 
-  /* Financial Status Colors */
+  /* ------------------------------------------------------------------------
+     4. Financial Movement Colors (Strict Domain Rules)
+     ------------------------------------------------------------------------ */
   --cf-bullish: #10b981;
-  --cf-bullish-bg: rgba(16, 185, 129, 0.12);
-  --cf-bullish-border: rgba(16, 185, 129, 0.24);
-  --cf-bearish: #ef4444;
-  --cf-bearish-bg: rgba(239, 68, 68, 0.12);
-  --cf-bearish-border: rgba(239, 68, 68, 0.24);
-  --cf-warning: #f59e0b;
-  --cf-warning-bg: rgba(245, 158, 11, 0.12);
+  --cf-bullish-subtle: rgba(16, 185, 129, 0.12);
+  --cf-bullish-border: rgba(16, 185, 129, 0.25);
 
-  /* Typography */
+  --cf-bearish: #ef4444;
+  --cf-bearish-subtle: rgba(239, 68, 68, 0.12);
+  --cf-bearish-border: rgba(239, 68, 68, 0.25);
+
+  --cf-neutral: #94a3b8;
+  --cf-neutral-subtle: rgba(148, 163, 184, 0.12);
+  --cf-neutral-border: rgba(148, 163, 184, 0.25);
+
+  /* ------------------------------------------------------------------------
+     5. Platform Status
+     ------------------------------------------------------------------------ */
+  --cf-status-success: #10b981;
+  --cf-status-warning: #f59e0b;
+  --cf-status-warning-subtle: rgba(245, 158, 11, 0.12);
+  --cf-status-error: #ef4444;
+  --cf-status-error-subtle: rgba(239, 68, 68, 0.12);
+  --cf-status-info: #06b6d4;
+  --cf-status-info-subtle: rgba(6, 182, 212, 0.12);
+
+  /* ------------------------------------------------------------------------
+     6. Borders, Dividers & Outlines
+     ------------------------------------------------------------------------ */
+  --cf-border: rgba(255, 255, 255, 0.08);
+  --cf-border-subtle: rgba(255, 255, 255, 0.04);
+  --cf-border-hover: rgba(255, 255, 255, 0.18);
+  --cf-border-focus: rgba(16, 185, 129, 0.55);
+  --cf-divider: rgba(255, 255, 255, 0.06);
+
+  /* ------------------------------------------------------------------------
+     7. Shadows & Glass Elevation
+     ------------------------------------------------------------------------ */
+  --cf-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  --cf-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.35);
+  --cf-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.55), 0 4px 6px -4px rgba(0, 0, 0, 0.45);
+  --cf-shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.38);
+
+  /* ------------------------------------------------------------------------
+     8. Typography Scale & Fonts
+     ------------------------------------------------------------------------ */
   --cf-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --cf-font-display: 'Outfit', 'Inter', -apple-system, sans-serif;
+  --cf-font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
 
-  /* Spacing */
+  --cf-font-size-2xs: 10px;
+  --cf-font-size-xs: 11px;
+  --cf-font-size-sm: 12px;
+  --cf-font-size-base: 14px;
+  --cf-font-size-md: 15px;
+  --cf-font-size-lg: 16px;
+  --cf-font-size-xl: 18px;
+  --cf-font-size-2xl: 22px;
+  --cf-font-size-3xl: 28px;
+  --cf-font-size-4xl: 36px;
+
+  --cf-font-weight-regular: 400;
+  --cf-font-weight-medium: 500;
+  --cf-font-weight-semibold: 600;
+  --cf-font-weight-bold: 700;
+  --cf-font-weight-extrabold: 800;
+
+  --cf-line-height-tight: 1.25;
+  --cf-line-height-normal: 1.5;
+  --cf-line-height-relaxed: 1.65;
+
+  /* ------------------------------------------------------------------------
+     9. Spacing Scale
+     ------------------------------------------------------------------------ */
   --cf-space-1: 4px;
   --cf-space-2: 8px;
   --cf-space-3: 12px;
@@ -53,23 +121,83 @@
   --cf-space-6: 24px;
   --cf-space-8: 32px;
   --cf-space-10: 40px;
+  --cf-space-12: 48px;
 
-  /* Border Radii */
+  /* ------------------------------------------------------------------------
+     10. Border Radii
+     ------------------------------------------------------------------------ */
+  --cf-radius-xs: 4px;
   --cf-radius-sm: 6px;
-  --cf-radius-md: 10px;
-  --cf-radius-lg: 16px;
-  --cf-radius-xl: 20px;
+  --cf-radius-md: 8px;
+  --cf-radius-lg: 12px;
+  --cf-radius-xl: 16px;
   --cf-radius-full: 9999px;
 
-  /* Elevation & Shadows */
-  --cf-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-  --cf-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-  --cf-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-  --cf-shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-
-  /* Transitions */
+  /* ------------------------------------------------------------------------
+     11. Motion & Transitions
+     ------------------------------------------------------------------------ */
   --cf-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --cf-transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================================
+   Light Mode Theme Overrides
+   ========================================================================== */
+
+[data-theme="light"] {
+  --cf-bg-base: #f8fafc;
+  --cf-bg-sidebar: #ffffff;
+  --cf-bg-header: rgba(255, 255, 255, 0.85);
+  --cf-bg-surface: #ffffff;
+  --cf-bg-surface-elevated: #f1f5f9;
+  --cf-bg-surface-glass: rgba(255, 255, 255, 0.85);
+  --cf-bg-surface-hover: rgba(241, 245, 249, 0.9);
+  --cf-bg-surface-subtle: rgba(0, 0, 0, 0.02);
+
+  --cf-text-primary: #0f172a;
+  --cf-text-secondary: #475569;
+  --cf-text-muted: #64748b;
+  --cf-text-disabled: #94a3b8;
+  --cf-text-inverse: #ffffff;
+
+  --cf-brand-primary: #059669;
+  --cf-brand-primary-hover: #047857;
+  --cf-brand-primary-active: #065f46;
+  --cf-brand-subtle: rgba(5, 150, 105, 0.1);
+  --cf-brand-border: rgba(5, 150, 105, 0.25);
+  --cf-brand-glow: 0 0 20px rgba(5, 150, 105, 0.15);
+  --cf-brand-gradient: linear-gradient(135deg, #059669 0%, #047857 100%);
+
+  --cf-bullish: #059669;
+  --cf-bullish-subtle: rgba(5, 150, 105, 0.1);
+  --cf-bullish-border: rgba(5, 150, 105, 0.25);
+
+  --cf-bearish: #dc2626;
+  --cf-bearish-subtle: rgba(220, 38, 38, 0.1);
+  --cf-bearish-border: rgba(220, 38, 38, 0.25);
+
+  --cf-neutral: #64748b;
+  --cf-neutral-subtle: rgba(100, 116, 139, 0.1);
+  --cf-neutral-border: rgba(100, 116, 139, 0.2);
+
+  --cf-status-success: #059669;
+  --cf-status-warning: #d97706;
+  --cf-status-warning-subtle: rgba(217, 119, 6, 0.1);
+  --cf-status-error: #dc2626;
+  --cf-status-error-subtle: rgba(220, 38, 38, 0.1);
+  --cf-status-info: #0284c7;
+  --cf-status-info-subtle: rgba(2, 132, 199, 0.1);
+
+  --cf-border: rgba(0, 0, 0, 0.08);
+  --cf-border-subtle: rgba(0, 0, 0, 0.04);
+  --cf-border-hover: rgba(0, 0, 0, 0.16);
+  --cf-border-focus: rgba(5, 150, 105, 0.55);
+  --cf-divider: rgba(0, 0, 0, 0.06);
+
+  --cf-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --cf-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --cf-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
+  --cf-shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.06);
 }
 
 /* ==========================================================================
@@ -86,11 +214,12 @@ html, body {
   background-color: var(--cf-bg-base);
   color: var(--cf-text-primary);
   font-family: var(--cf-font-sans);
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: var(--cf-font-size-md);
+  line-height: var(--cf-line-height-relaxed);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
+  transition: background-color var(--cf-transition-normal), color var(--cf-transition-normal);
 }
 
 #root {
@@ -101,10 +230,10 @@ html, body {
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--cf-font-display);
-  font-weight: 700;
+  font-weight: var(--cf-font-weight-bold);
   color: var(--cf-text-primary);
   margin-top: 0;
-  line-height: 1.25;
+  line-height: var(--cf-line-height-tight);
 }
 
 a {
@@ -124,9 +253,73 @@ button {
   outline: none;
 }
 
-input, select {
+input, select, textarea {
   font-family: var(--cf-font-sans);
-  font-size: 14px;
+  font-size: var(--cf-font-size-base);
+}
+
+/* ==========================================================================
+   Financial Domain Typography Utilities
+   ========================================================================== */
+
+.cf-num-tabular {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.cf-text-bullish {
+  color: var(--cf-bullish) !important;
+}
+
+.cf-text-bearish {
+  color: var(--cf-bearish) !important;
+}
+
+.cf-text-neutral {
+  color: var(--cf-neutral) !important;
+}
+
+.cf-page-header {
+  margin-bottom: var(--cf-space-6);
+}
+
+.cf-page-title {
+  font-size: var(--cf-font-size-3xl);
+  font-weight: var(--cf-font-weight-extrabold);
+  letter-spacing: -0.03em;
+  color: var(--cf-text-primary);
+  margin: 0;
+}
+
+.cf-page-subtitle {
+  font-size: var(--cf-font-size-base);
+  color: var(--cf-text-secondary);
+  margin-top: var(--cf-space-1);
+}
+
+.cf-section-title {
+  font-size: var(--cf-font-size-lg);
+  font-weight: var(--cf-font-weight-bold);
+  letter-spacing: -0.01em;
+  color: var(--cf-text-primary);
+  margin: 0 0 var(--cf-space-3) 0;
+}
+
+.cf-card-title {
+  font-size: var(--cf-font-size-lg);
+  font-weight: var(--cf-font-weight-semibold);
+  color: var(--cf-text-primary);
+  margin: 0;
+}
+
+.cf-metric-value {
+  font-family: var(--cf-font-display);
+  font-size: var(--cf-font-size-3xl);
+  font-weight: var(--cf-font-weight-extrabold);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--cf-text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ==========================================================================
@@ -134,8 +327,8 @@ input, select {
    ========================================================================== */
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {

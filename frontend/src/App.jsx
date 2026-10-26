@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import './App.css'
+import { ThemeProvider } from './state/ThemeContext'
 import { NavigationProvider, useNavigation } from './state/NavigationContext'
 import { PAGES } from './state/pages'
 import { AppLayout } from './layouts/AppLayout'
@@ -30,22 +31,24 @@ function App() {
   const [globalInspectingAsset, setGlobalInspectingAsset] = useState(null)
 
   return (
-    <NavigationProvider>
-      <AppLayout
-        onSearch={setSearchValue}
-        searchValue={searchValue}
-        onSelectAsset={(asset) => setGlobalInspectingAsset(asset)}
-      >
-        <MainContent searchValue={searchValue} />
-      </AppLayout>
+    <ThemeProvider>
+      <NavigationProvider>
+        <AppLayout
+          onSearch={setSearchValue}
+          searchValue={searchValue}
+          onSelectAsset={(asset) => setGlobalInspectingAsset(asset)}
+        >
+          <MainContent searchValue={searchValue} />
+        </AppLayout>
 
-      {globalInspectingAsset && (
-        <AssetDetailModal
-          instrument={globalInspectingAsset}
-          onClose={() => setGlobalInspectingAsset(null)}
-        />
-      )}
-    </NavigationProvider>
+        {globalInspectingAsset && (
+          <AssetDetailModal
+            instrument={globalInspectingAsset}
+            onClose={() => setGlobalInspectingAsset(null)}
+          />
+        )}
+      </NavigationProvider>
+    </ThemeProvider>
   )
 }
 
