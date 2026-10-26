@@ -55,13 +55,25 @@ class TestAnalyticsApiRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(envelope.data.rsi)
 
     async def test_get_returns_analysis_route(self):
-        envelope = await get_returns_analysis(symbol="AAPL", lookback_days=30, service=self.service)
+        envelope = await get_returns_analysis(
+            symbol="AAPL",
+            lookback_days=30,
+            benchmark="SPY",
+            risk_free_rate=0.04,
+            service=self.service,
+        )
         self.assertIsInstance(envelope, ResponseEnvelope)
         self.assertEqual(envelope.data.symbol, "AAPL")
         self.assertIsNotNone(envelope.data.period_return)
         self.assertIsNotNone(envelope.data.volatility)
         self.assertIsNotNone(envelope.data.drawdown)
         self.assertIsNotNone(envelope.data.summary)
+        self.assertIsNotNone(envelope.data.risk_metrics)
+        self.assertGreater(envelope.data.risk_metrics.win_rate, Decimal("0"))
+        self.assertIsNotNone(envelope.data.benchmark)
+        self.assertEqual(envelope.data.benchmark.benchmark_symbol, "SPY")
+        self.assertIsNotNone(envelope.data.benchmark.beta)
+        self.assertEqual(envelope.meta["benchmark"], "SPY")
 
 
 class TestAnalyticsHttpIntegration(unittest.TestCase):
@@ -128,7 +140,7 @@ class TestAnalyticsHttpIntegration(unittest.TestCase):
         self.assertIn("bollinger", data)
 
     def test_http_get_returns_endpoint(self):
-        response = self.client.get("/api/v1/analytics/returns/AAPL?lookback_days=30")
+        response = self.client.get("/api/v1/analytics/returns/AAPL?lookback_days=30&benchmark=SPY&risk_free_rate=0.03")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         data = payload["data"]
@@ -136,6 +148,16 @@ class TestAnalyticsHttpIntegration(unittest.TestCase):
         self.assertIn("period_return", data)
         self.assertIn("volatility", data)
         self.assertIn("drawdown", data)
+        self.assertIn("risk_metrics", data)
+        self.assertIsNotNone(data["risk_metrics"])
+        self.assertIn("sharpe_ratio", data["risk_metrics"])
+        self.assertIn("cagr", data["risk_metrics"])
+        self.assertIn("benchmark", data)
+        self.assertIsNotNone(data["benchmark"])
+        self.assertEqual(data["benchmark"]["benchmark_symbol"], "SPY")
+        self.assertIn("beta", data["benchmark"])
+        self.assertIn("tracking_error", data["benchmark"])
+        self.assertEqual(payload["meta"]["benchmark"], "SPY")
 
 
 if __name__ == "__main__":

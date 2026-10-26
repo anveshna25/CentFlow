@@ -1,4 +1,5 @@
 from app.api.schemas.analytics import (
+    BenchmarkMetricsSchema,
     BollingerBandsComponentSchema,
     DrawdownMetricSchema,
     IndicatorSeriesResponseSchema,
@@ -7,6 +8,7 @@ from app.api.schemas.analytics import (
     PeriodReturnSchema,
     PriceSummarySchema,
     ReturnsAnalysisResponseSchema,
+    RiskAdjustedMetricsSchema,
     VolatilityMetricsSchema,
 )
 from app.api.schemas.base import (
@@ -67,6 +69,8 @@ __all__ = [
     "PeriodReturnSchema",
     "VolatilityMetricsSchema",
     "DrawdownMetricSchema",
+    "RiskAdjustedMetricsSchema",
+    "BenchmarkMetricsSchema",
     "ReturnsAnalysisResponseSchema",
     "MACDComponentSchema",
     "BollingerBandsComponentSchema",

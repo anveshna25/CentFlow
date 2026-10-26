@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.routes.market_data import get_market_data_service
 from app.api.schemas.analytics import (
+    BenchmarkMetricsSchema,
     BollingerBandsComponentSchema,
     DrawdownMetricSchema,
     IndicatorSeriesResponseSchema,
@@ -15,6 +16,7 @@ from app.api.schemas.analytics import (
     PeriodReturnSchema,
     PriceSummarySchema,
     ReturnsAnalysisResponseSchema,
+    RiskAdjustedMetricsSchema,
     VolatilityMetricsSchema,
 )
 from app.api.schemas.base import ResponseEnvelope
@@ -150,20 +152,25 @@ async def get_returns_analysis(
     interval: str = Query(default="1d", description="Observation bar interval."),
     lookback_days: int = Query(default=365, ge=1, le=1825, description="Lookback window in days."),
     annualize_factor: int = Query(default=252, description="Annualization factor (252 stocks, 365 crypto)."),
+    benchmark: Optional[str] = Query(default=None, description="Optional benchmark index symbol (e.g. SPY, QQQ, BTC-USD) for comparative beta, alpha, and correlation."),
+    risk_free_rate: float = Query(default=0.0, ge=0.0, le=1.0, description="Annual risk-free benchmark rate for Sharpe and Sortino ratios."),
     service: AnalyticsService = Depends(get_analytics_service),
 ) -> ResponseEnvelope[ReturnsAnalysisResponseSchema]:
-    """Retrieve return performance, statistical distribution, volatility, and drawdown analysis."""
+    """Retrieve return performance, statistical distribution, volatility, drawdown, and benchmark analysis."""
     resolved_interval = _resolve_val(interval, "1d")
     resolved_lookback = _resolve_val(lookback_days, 365)
     resolved_annualize = _resolve_val(annualize_factor, 252)
+    resolved_benchmark = _resolve_val(benchmark, None)
+    resolved_rf = _resolve_val(risk_free_rate, 0.0)
 
     result = await service.get_performance_metrics(
         symbol=symbol,
         interval=resolved_interval,
         lookback_days=resolved_lookback,
         annualize_factor=resolved_annualize,
+        benchmark_symbol=resolved_benchmark,
+        risk_free_rate=resolved_rf,
     )
-
 
     pr = result.get("period_return")
     pr_schema = PeriodReturnSchema(**asdict(pr)) if pr else None
@@ -177,6 +184,12 @@ async def get_returns_analysis(
     sumry = result.get("summary")
     sumry_schema = PriceSummarySchema(**asdict(sumry)) if sumry else None
 
+    risk_m = result.get("risk_metrics")
+    risk_schema = RiskAdjustedMetricsSchema(**asdict(risk_m)) if risk_m else None
+
+    bench_m = result.get("benchmark")
+    bench_schema = BenchmarkMetricsSchema(**asdict(bench_m)) if bench_m else None
+
     data = ReturnsAnalysisResponseSchema(
         symbol=result["symbol"],
         interval=result["interval"],
@@ -185,8 +198,18 @@ async def get_returns_analysis(
         volatility=vol_schema,
         drawdown=dd_schema,
         summary=sumry_schema,
+        risk_metrics=risk_schema,
+        benchmark=bench_schema,
     )
+    meta_info: dict[str, Any] = {
+        "symbol": symbol.strip().upper(),
+        "interval": resolved_interval,
+        "lookback_days": resolved_lookback,
+    }
+    if resolved_benchmark:
+        meta_info["benchmark"] = resolved_benchmark.strip().upper()
+
     return ResponseEnvelope(
         data=data,
-        meta={"symbol": symbol.strip().upper(), "interval": interval},
+        meta=meta_info,
     )
