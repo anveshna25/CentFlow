@@ -136,3 +136,43 @@ class SyncCatalogResponseSchema(BaseSchema):
     query: str = Field(..., description="Query executed.")
     synced_count: int = Field(..., description="Number of instruments discovered and persisted.")
     instruments: list[InstrumentResponseSchema] = Field(..., description="List of instruments synced.")
+
+
+class CacheTTLConfigSchema(BaseSchema):
+    """TTL configuration thresholds in seconds."""
+
+    quote_ttl: float = Field(..., description="Quote cache TTL in seconds.")
+    history_ttl: float = Field(..., description="Historical series cache TTL in seconds.")
+    search_ttl: float = Field(..., description="Instrument search cache TTL in seconds.")
+    asset_ttl: float = Field(..., description="Asset lookup metadata cache TTL in seconds.")
+    stale_grace_ttl: float = Field(..., description="Stale-while-revalidate grace period in seconds.")
+
+
+class CacheStatsSchema(BaseSchema):
+    """Cache telemetry and performance metrics schema."""
+
+    enabled: bool = Field(..., description="Whether caching layer is actively enabled.")
+    size: int = Field(..., description="Current count of stored cache entries.")
+    max_capacity: int = Field(..., description="Maximum entry capacity.")
+    eviction_policy: str = Field(..., description="Active eviction policy: lru, lfu, or fifo.")
+    hits: int = Field(..., description="Cache hits on unexpired entries.")
+    misses: int = Field(..., description="Cache misses requiring provider fetch.")
+    stale_hits: int = Field(default=0, description="Cache hits served with stale data during degradation.")
+    evictions: int = Field(..., description="Count of evicted entries.")
+    coalesced: int = Field(..., description="Concurrent requests coalesced into single-flight operations.")
+    hit_ratio: float = Field(..., description="Ratio of successful cache hits to total requests.")
+    ttl_config: Optional[CacheTTLConfigSchema] = Field(default=None, description="Active TTL thresholds.")
+
+
+class CacheClearResponseSchema(BaseSchema):
+    """Result of cache invalidation operation."""
+
+    cleared: bool = Field(..., description="Whether operation succeeded.")
+    prefix: Optional[str] = Field(default=None, description="Prefix filter applied during invalidation.")
+    entries_removed: int = Field(..., description="Number of entries invalidated.")
+
+
+class CachePurgeResponseSchema(BaseSchema):
+    """Result of expired cache sweep operation."""
+
+    purged_count: int = Field(..., description="Count of expired entries removed.")

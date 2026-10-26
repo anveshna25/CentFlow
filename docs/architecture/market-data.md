@@ -171,22 +171,39 @@ Defined in [`backend/app/providers/yahoo.py`](../../backend/app/providers/yahoo.
 
 ---
 
-## 8. In-Memory Caching & Rate-Limiting Layer
+## 8. Multi-Tier Caching & Rate-Limiting Layer
 
-To prevent exceeding upstream provider rate limits and shield the platform from duplicate concurrent queries, CentFlow incorporates an asynchronous caching and single-flight request coalescing architecture:
+To prevent exceeding upstream provider rate limits, ensure sub-millisecond latencies, and shield the platform from provider outages, CentFlow incorporates a production-grade multi-tier caching and request coalescing architecture:
 
 ### 8.1 `AsyncMemoryCache` ([`backend/app/core/cache.py`](../../backend/app/core/cache.py))
-- **TTL Expiration:** Each cache entry maintains an absolute expiration timestamp (`now + ttl_seconds`), automatically evicted on read or via background cleanup.
-- **Single-Flight Request Coalescing:** When multiple concurrent coroutines request the same uncached key simultaneously, only one leader execution triggers the remote factory call while follower tasks await the shared future.
-- **Capacity Management:** High-water mark capping (`max_capacity=1000`) with automatic oldest/expired item eviction.
-- **Metrics Telemetry:** Tracks `hits`, `misses`, `evictions`, and `coalesced` requests.
+- **Differentiated TTL Expiration:** Each cache entry maintains an absolute expiration timestamp (`now + ttl_seconds`) and an optional extended stale grace window (`stale_until = expires_at + stale_grace_ttl`).
+- **Pluggable Eviction Policies:**
+  - `lru` (Least Recently Used, default): Evicts entries with the oldest access sequence.
+  - `lfu` (Least Frequently Used): Evicts entries with lowest access frequency, tie-broken by access sequence.
+  - `fifo` (First In, First Out): Evicts oldest created entries regardless of access frequency.
+  - Sequence-backed deterministic eviction ensures OS-timer-independent accuracy on all platforms.
+- **Single-Flight Request Coalescing:** When concurrent coroutines request the same uncached key simultaneously, only one leader execution triggers the remote factory call while follower tasks await the shared future.
+- **Stale-While-Revalidate (SWR) & Fault Tolerance:** If an upstream provider fails (outage, rate limit, timeout), `AsyncMemoryCache` automatically recovers previously cached entries, serves them with `is_stale=True`, resolves all coalesced in-flight waiters, and records a `stale_hit`.
+- **Prefix Invalidation:** `clear(prefix)` supports surgical invalidation of specific cache partitions (e.g. `quote:`, `history:`, `search:`).
+- **Rich Telemetry:** Tracks `hits`, `misses`, `stale_hits`, `evictions`, `coalesced`, and computed `hit_ratio`.
 
 ### 8.2 `CachedMarketDataProvider` ([`backend/app/providers/cache.py`](../../backend/app/providers/cache.py))
 Transparent proxy decorator implementing `BaseMarketDataProvider`:
 - **Quote Caching:** Keyed by `quote:{SYMBOL}`, default TTL: 15 seconds.
 - **Historical Bars Caching:** Keyed by `history:{SYMBOL}:{START}:{END}:{INTERVAL}`, default TTL: 300 seconds (5 minutes).
 - **Search Caching:** Keyed by `search:{QUERY}`, default TTL: 600 seconds (10 minutes).
+- **Asset Metadata Caching:** Keyed by `lookup:{SYMBOL}`, default TTL: 1800 seconds (30 minutes).
+- **Stale Grace Period:** Configurable 24-hour grace window (`stale_grace_ttl=86400`) during upstream failures.
+- **Tier-2 Persistence Fallback:** If in-memory cache has no prior entry and the remote provider is down, `db_fallback_fn` queries `PriceRepository` and `InstrumentRepository` to serve persisted prices marked with `is_stale=True`.
 - **Diagnostic Bypass:** `get_status()` bypasses cache to always report live provider connectivity.
+
+### 8.3 Cache API Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/market-data/cache/stats` | Retrieve cache telemetry, hit ratio, eviction policy, and TTL configurations |
+| `POST` | `/api/v1/market-data/cache/clear` | Invalidate all entries or filter by `prefix` (e.g., `?prefix=quote:`) |
+| `POST` | `/api/v1/market-data/cache/purge` | Trigger immediate cleanup of expired entries |
 
 ---
 

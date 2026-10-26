@@ -34,6 +34,10 @@ class Settings:
     quote_cache_ttl_seconds: int = 15
     history_cache_ttl_seconds: int = 300
     search_cache_ttl_seconds: int = 600
+    asset_cache_ttl_seconds: int = 1800
+    cache_max_capacity: int = 1000
+    cache_eviction_policy: str = "lru"
+    cache_stale_grace_seconds: int = 86400
     quote_staleness_threshold_seconds: int = 900
     cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
     api_v1_prefix: str = "/api/v1"
@@ -71,6 +75,10 @@ def get_settings() -> Settings:
         quote_cache_ttl_seconds=int(os.getenv("QUOTE_CACHE_TTL_SECONDS", "15")),
         history_cache_ttl_seconds=int(os.getenv("HISTORY_CACHE_TTL_SECONDS", "300")),
         search_cache_ttl_seconds=int(os.getenv("SEARCH_CACHE_TTL_SECONDS", "600")),
+        asset_cache_ttl_seconds=int(os.getenv("ASSET_CACHE_TTL_SECONDS", "1800")),
+        cache_max_capacity=int(os.getenv("CACHE_MAX_CAPACITY", "1000")),
+        cache_eviction_policy=os.getenv("CACHE_EVICTION_POLICY", "lru").lower(),
+        cache_stale_grace_seconds=int(os.getenv("CACHE_STALE_GRACE_SECONDS", "86400")),
         quote_staleness_threshold_seconds=int(os.getenv("QUOTE_STALENESS_THRESHOLD_SECONDS", "900")),
         cors_origins=cors_origins,
         api_v1_prefix=os.getenv("API_V1_PREFIX", "/api/v1"),
