@@ -158,6 +158,22 @@ class InstrumentNotFoundError(NotFoundError):
         super().__init__(resource="Instrument", identifier=symbol)
 
 
+class StaleDataError(CentFlowException):
+    """Raised when market data exceeds the acceptable staleness threshold."""
+
+    def __init__(self, symbol: str, staleness_seconds: int, threshold_seconds: int):
+        super().__init__(
+            message=f"Market quote for symbol '{symbol}' is stale ({staleness_seconds}s > {threshold_seconds}s threshold).",
+            code="STALE_MARKET_DATA",
+            status_code=status.HTTP_409_CONFLICT,
+            details=[{
+                "symbol": symbol,
+                "staleness_seconds": staleness_seconds,
+                "threshold_seconds": threshold_seconds,
+            }],
+        )
+
+
 def _build_error_response(code: str, message: str, details: Optional[list[Any]] = None) -> dict[str, Any]:
     """Helper to build uniform error envelope."""
     payload: dict[str, Any] = {

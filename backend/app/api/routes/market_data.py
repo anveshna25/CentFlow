@@ -20,6 +20,7 @@ from app.api.schemas.market_data import (
 from app.database.session import get_db
 from app.services.ingestion import MarketDataIngestionService
 from app.services.market_data import MarketDataService
+from app.services.quote import QuoteService
 
 router = APIRouter(prefix="/market-data", tags=["market-data"])
 
@@ -27,6 +28,11 @@ router = APIRouter(prefix="/market-data", tags=["market-data"])
 def get_market_data_service() -> MarketDataService:
     """Dependency injector for MarketDataService."""
     return MarketDataService()
+
+
+def get_quote_service() -> QuoteService:
+    """Dependency injector for QuoteService."""
+    return QuoteService()
 
 
 def get_ingestion_service(
@@ -46,16 +52,46 @@ async def get_provider_status(
     return ResponseEnvelope(data=ProviderStatusSchema(**asdict(status)))
 
 
+@router.get("/quotes", response_model=ResponseEnvelope[list[QuoteResponseSchema]])
+async def get_quotes(
+    symbols: Optional[str] = Query(
+        default=None,
+        description="Comma-separated list of instrument ticker symbols (e.g. 'AAPL,MSFT,BTC-USD')",
+    ),
+    service: QuoteService = Depends(get_quote_service),
+) -> ResponseEnvelope[list[QuoteResponseSchema]]:
+    """Retrieve normalized market quotes for multiple instrument symbols in a single batch request."""
+    if not symbols or not symbols.strip():
+        return ResponseEnvelope(data=[], meta={"count": 0, "source": service.provider.name})
+
+    symbol_list = [s.strip() for s in symbols.split(",") if s.strip()]
+    quotes = await service.get_quotes(symbol_list, allow_partial=True)
+    data = [QuoteResponseSchema(**asdict(q)) for q in quotes]
+    return ResponseEnvelope(
+        data=data,
+        meta={
+            "count": len(data),
+            "requested": len(symbol_list),
+            "source": service.provider.name,
+        },
+    )
+
+
 @router.get("/quotes/{symbol}", response_model=ResponseEnvelope[QuoteResponseSchema])
 async def get_quote(
     symbol: str,
-    service: MarketDataService = Depends(get_market_data_service),
+    service: QuoteService = Depends(get_quote_service),
 ) -> ResponseEnvelope[QuoteResponseSchema]:
     """Retrieve normalized price quote for a given instrument symbol."""
     quote = await service.get_quote(symbol)
     return ResponseEnvelope(
         data=QuoteResponseSchema(**asdict(quote)),
-        meta={"source": service.provider.name},
+        meta={
+            "source": quote.data_source,
+            "market_status": quote.market_status,
+            "is_stale": quote.is_stale,
+            "delay_minutes": quote.delay_minutes,
+        },
     )
 
 

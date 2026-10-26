@@ -15,6 +15,9 @@ from app.providers.cache import CachedMarketDataProvider
 from app.providers.registry import get_provider
 
 
+from app.services.quote import MarketQuote, QuoteService
+
+
 class MarketDataService:
     """Application service for orchestrating market data operations.
 
@@ -43,10 +46,17 @@ class MarketDataService:
         else:
             self._provider = raw_provider
 
+        self._quote_service = QuoteService(provider=self._provider, enable_cache=False)
+
     @property
     def provider(self) -> BaseMarketDataProvider:
         """The active market data provider instance."""
         return self._provider
+
+    @property
+    def quote_service(self) -> QuoteService:
+        """The dedicated QuoteService instance."""
+        return self._quote_service
 
     @property
     def capabilities(self):
@@ -68,10 +78,17 @@ class MarketDataService:
         if isinstance(self._provider, CachedMarketDataProvider):
             await self._provider.clear_cache()
 
-    async def get_quote(self, symbol: str) -> ProviderQuote:
-        """Fetch normalized quote for an instrument symbol."""
-        clean_symbol = symbol.strip().upper()
-        return await self._provider.get_quote(clean_symbol)
+    async def get_quote(self, symbol: str) -> MarketQuote:
+        """Fetch normalized, validated quote for an instrument symbol."""
+        return await self._quote_service.get_quote(symbol)
+
+    async def get_quotes(
+        self,
+        symbols: Sequence[str],
+        allow_partial: bool = True,
+    ) -> list[MarketQuote]:
+        """Fetch batch of normalized, validated quotes for multiple instrument symbols."""
+        return await self._quote_service.get_quotes(symbols, allow_partial=allow_partial)
 
     async def get_historical_bars(
         self,

@@ -19,6 +19,11 @@ class QuoteResponseSchema(BaseSchema):
     previous_close: Optional[Decimal] = Field(default=None, description="Previous session closing price.")
     change: Optional[Decimal] = Field(default=None, description="Absolute change.")
     change_percent: Optional[Decimal] = Field(default=None, description="Percentage change.")
+    market_status: Optional[str] = Field(default="UNKNOWN", description="Market session status: OPEN, CLOSED, EXTENDED, UNKNOWN.")
+    is_stale: bool = Field(default=False, description="Whether the quote observation is stale.")
+    delay_minutes: int = Field(default=0, description="Provider data delay in minutes (0 for real-time).")
+    data_source: Optional[str] = Field(default=None, description="Source market data provider identifier.")
+    staleness_seconds: Optional[int] = Field(default=None, description="Elapsed seconds since quote timestamp.")
 
 
 class BarResponseSchema(BaseSchema):

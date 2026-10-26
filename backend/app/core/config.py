@@ -34,6 +34,7 @@ class Settings:
     quote_cache_ttl_seconds: int = 15
     history_cache_ttl_seconds: int = 300
     search_cache_ttl_seconds: int = 600
+    quote_staleness_threshold_seconds: int = 900
     cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
     api_v1_prefix: str = "/api/v1"
     debug: bool = False
@@ -70,6 +71,7 @@ def get_settings() -> Settings:
         quote_cache_ttl_seconds=int(os.getenv("QUOTE_CACHE_TTL_SECONDS", "15")),
         history_cache_ttl_seconds=int(os.getenv("HISTORY_CACHE_TTL_SECONDS", "300")),
         search_cache_ttl_seconds=int(os.getenv("SEARCH_CACHE_TTL_SECONDS", "600")),
+        quote_staleness_threshold_seconds=int(os.getenv("QUOTE_STALENESS_THRESHOLD_SECONDS", "900")),
         cors_origins=cors_origins,
         api_v1_prefix=os.getenv("API_V1_PREFIX", "/api/v1"),
         debug=(env == "development"),
