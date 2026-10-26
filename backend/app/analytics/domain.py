@@ -138,6 +138,17 @@ class BollingerBandsResult:
     timestamps: Optional[list[datetime]] = None
 
 
+@dataclass(frozen=True)
+class ATRResult:
+    """Average True Range (ATR) indicator result."""
+
+    tr: list[Optional[Decimal]]
+    atr: list[Optional[Decimal]]
+    atr_percent: list[Optional[Decimal]]
+    period: int = 14
+    timestamps: Optional[list[datetime]] = None
+
+
 class TrendPosture(str, Enum):
     """Directional trend alignment classification."""
 

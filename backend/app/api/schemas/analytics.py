@@ -121,6 +121,15 @@ class BollingerBandsComponentSchema(BaseSchema):
     num_std: Decimal = Field(default=Decimal("2.0"), description="Standard deviation multiplier.")
 
 
+class ATRComponentSchema(BaseSchema):
+    """Average True Range (ATR) component series."""
+
+    tr: list[Optional[Decimal]] = Field(..., description="True Range series.")
+    atr: list[Optional[Decimal]] = Field(..., description="Average True Range series.")
+    atr_percent: list[Optional[Decimal]] = Field(..., description="ATR as percentage of closing price.")
+    period: int = Field(default=14, description="ATR smoothing period.")
+
+
 class IndicatorSeriesResponseSchema(BaseSchema):
     """Time-series technical indicators dataset."""
 
@@ -134,6 +143,7 @@ class IndicatorSeriesResponseSchema(BaseSchema):
     rsi: Optional[list[Optional[Decimal]]] = Field(default=None, description="RSI 14 series.")
     macd: Optional[MACDComponentSchema] = Field(default=None, description="MACD component series.")
     bollinger: Optional[BollingerBandsComponentSchema] = Field(default=None, description="Bollinger Bands component series.")
+    atr: Optional[ATRComponentSchema] = Field(default=None, description="Average True Range component series.")
 
 
 class MarketIntelligenceResponseSchema(BaseSchema):

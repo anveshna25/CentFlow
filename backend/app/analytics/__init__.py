@@ -14,6 +14,7 @@ from app.analytics.calculations import (
     to_decimal,
 )
 from app.analytics.domain import (
+    ATRResult,
     BenchmarkMetrics,
     BollingerBandsResult,
     CalculationPeriod,
@@ -30,11 +31,13 @@ from app.analytics.domain import (
     VolatilityRegime,
 )
 from app.analytics.indicators import (
+    calculate_atr,
     calculate_bollinger_bands,
     calculate_ema,
     calculate_macd,
     calculate_rsi,
     calculate_sma,
+    calculate_true_range,
 )
 from app.analytics.intelligence import synthesize_market_intelligence
 
@@ -49,6 +52,7 @@ __all__ = [
     "IndicatorSeries",
     "MACDResult",
     "BollingerBandsResult",
+    "ATRResult",
     "TrendPosture",
     "MomentumState",
     "VolatilityRegime",
@@ -71,5 +75,7 @@ __all__ = [
     "calculate_rsi",
     "calculate_macd",
     "calculate_bollinger_bands",
+    "calculate_true_range",
+    "calculate_atr",
     "synthesize_market_intelligence",
 ]

@@ -17,6 +17,7 @@ from app.analytics.calculations import (
     to_decimal,
 )
 from app.analytics.domain import (
+    ATRResult,
     BenchmarkMetrics,
     BollingerBandsResult,
     DrawdownMetric,
@@ -28,11 +29,13 @@ from app.analytics.domain import (
     VolatilityMetrics,
 )
 from app.analytics.indicators import (
+    calculate_atr,
     calculate_bollinger_bands,
     calculate_ema,
     calculate_macd,
     calculate_rsi,
     calculate_sma,
+    calculate_true_range,
 )
 from app.analytics.intelligence import synthesize_market_intelligence
 from app.repositories.instrument import InstrumentRepository
@@ -99,6 +102,50 @@ class AnalyticsService:
 
         # Clean, deduplicate timestamps, sort, and handle gaps with exact precision
         return prepare_validated_series(raw_prices, raw_timestamps)
+
+    async def get_ohlcv_series(
+        self,
+        symbol: str,
+        interval: str = "1d",
+        lookback_days: int = 365,
+    ) -> tuple[list[Decimal], list[Decimal], list[Decimal], list[Decimal], list[datetime]]:
+        """Retrieve chronological High, Low, Close prices, Volumes, and Timestamps for a symbol."""
+        clean_symbol = symbol.strip().upper()
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(days=lookback_days)
+
+        # 1. Check database persistence
+        if self._db and self._price_repo and self._instrument_repo:
+            instrument = self._instrument_repo.get_by_symbol(clean_symbol)
+            if instrument:
+                prices_models = self._price_repo.get_historical_prices(
+                    instrument_id=instrument.id,
+                    start=start,
+                    end=now,
+                    interval=interval,
+                )
+                if len(prices_models) >= 10:
+                    highs = [to_decimal(m.high if m.high is not None else (m.close or m.value)) for m in prices_models]
+                    lows = [to_decimal(m.low if m.low is not None else (m.close or m.value)) for m in prices_models]
+                    closes = [to_decimal(m.close if m.close is not None else m.value) for m in prices_models]
+                    volumes = [to_decimal(m.volume if m.volume is not None else 0) for m in prices_models]
+                    timestamps = [m.timestamp for m in prices_models]
+                    return highs, lows, closes, volumes, timestamps
+
+        # 2. Query market data provider / cache
+        bars = await self._market_data_service.get_historical_bars(
+            symbol=clean_symbol,
+            start=start,
+            end=now,
+            interval=interval,
+        )
+
+        highs = [to_decimal(b.high if b.high is not None else b.close) for b in bars]
+        lows = [to_decimal(b.low if b.low is not None else b.close) for b in bars]
+        closes = [to_decimal(b.close) for b in bars]
+        volumes = [to_decimal(b.volume if b.volume is not None else 0) for b in bars]
+        timestamps = [b.timestamp for b in bars]
+        return highs, lows, closes, volumes, timestamps
 
     async def get_price_summary(
         self,
@@ -179,9 +226,11 @@ class AnalyticsService:
         include_rsi: bool = True,
         include_macd: bool = True,
         include_bollinger: bool = True,
+        include_atr: bool = True,
+        atr_period: int = 14,
     ) -> dict[str, Any]:
         """Compute technical indicator series for a symbol."""
-        prices, timestamps = await self.get_price_series(symbol, interval, lookback_days)
+        highs, lows, prices, _, timestamps = await self.get_ohlcv_series(symbol, interval, lookback_days)
 
         smas: dict[str, list[Optional[Decimal]]] = {}
         for w in (sma_windows or [20, 50, 200]):
@@ -194,6 +243,11 @@ class AnalyticsService:
         rsi_series = calculate_rsi(prices, 14) if include_rsi else None
         macd_result = calculate_macd(prices, 12, 26, 9, timestamps=timestamps) if include_macd else None
         bb_result = calculate_bollinger_bands(prices, 20, Decimal("2.0"), timestamps=timestamps) if include_bollinger else None
+        atr_result = (
+            calculate_atr(highs, lows, prices, period=atr_period, timestamps=timestamps)
+            if include_atr
+            else None
+        )
 
         return {
             "symbol": symbol.strip().upper(),
@@ -204,6 +258,7 @@ class AnalyticsService:
             "rsi": rsi_series,
             "macd": macd_result,
             "bollinger": bb_result,
+            "atr": atr_result,
         }
 
     async def get_market_intelligence(

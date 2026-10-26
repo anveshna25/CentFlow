@@ -5,7 +5,7 @@ import statistics
 from typing import Optional
 
 from app.analytics.calculations import to_decimal
-from app.analytics.domain import BollingerBandsResult, MACDResult
+from app.analytics.domain import ATRResult, BollingerBandsResult, MACDResult
 
 
 def calculate_sma(
@@ -347,3 +347,136 @@ def calculate_bollinger_bands(
         num_std=dec_num_std,
         timestamps=list(timestamps) if timestamps else None,
     )
+
+
+def calculate_true_range(
+    highs: Sequence[Decimal | float | int | str],
+    lows: Sequence[Decimal | float | int | str],
+    closes: Sequence[Decimal | float | int | str],
+) -> list[Optional[Decimal]]:
+    """Calculate True Range (TR) sequence across historical OHLC observations.
+
+    Standard formula by J. Welles Wilder:
+        For t = 0: TR_0 = High_0 - Low_0
+        For t > 0: TR_t = max(High_t - Low_t, abs(High_t - Close_{t-1}), abs(Low_t - Close_{t-1}))
+
+    Args:
+        highs: Sequence of high prices.
+        lows: Sequence of low prices.
+        closes: Sequence of closing prices.
+
+    Returns:
+        list[Optional[Decimal]]: Aligned True Range series.
+    """
+    if not (len(highs) == len(lows) == len(closes)):
+        raise ValueError("High, Low, and Close sequences must have identical lengths")
+
+    n = len(highs)
+    if n == 0:
+        return []
+
+    dec_highs = [to_decimal(h) for h in highs]
+    dec_lows = [to_decimal(l) for l in lows]
+    dec_closes = [to_decimal(c) for c in closes]
+
+    result: list[Optional[Decimal]] = [None] * n
+    # Period 0: High - Low
+    result[0] = (dec_highs[0] - dec_lows[0]).quantize(Decimal("0.0001"))
+
+    for i in range(1, n):
+        prev_close = dec_closes[i - 1]
+        hl = dec_highs[i] - dec_lows[i]
+        h_pc = abs(dec_highs[i] - prev_close)
+        l_pc = abs(dec_lows[i] - prev_close)
+        tr = max(hl, h_pc, l_pc)
+        result[i] = tr.quantize(Decimal("0.0001"))
+
+    return result
+
+
+def calculate_atr(
+    highs: Sequence[Decimal | float | int | str],
+    lows: Sequence[Decimal | float | int | str],
+    closes: Sequence[Decimal | float | int | str],
+    period: int = 14,
+    timestamps: Optional[Sequence[datetime]] = None,
+) -> ATRResult:
+    """Calculate Average True Range (ATR) using Wilder's smoothed moving average.
+
+    Components:
+        True Range = max(High - Low, abs(High - PrevClose), abs(Low - PrevClose))
+        Initial ATR = SMA(True Range, period)
+        Subsequent ATR = (PrevATR * (period - 1) + CurrentTR) / period
+        ATR% = (ATR / Close) * 100
+
+    Args:
+        highs: Sequence of high prices.
+        lows: Sequence of low prices.
+        closes: Sequence of closing prices.
+        period: Number of periods for smoothing (default 14).
+        timestamps: Optional observation timestamps.
+
+    Returns:
+        ATRResult: Dataclass containing tr, atr, and atr_percent series.
+    """
+    if period < 1:
+        raise ValueError("ATR period must be greater than or equal to 1")
+
+    if not (len(highs) == len(lows) == len(closes)):
+        raise ValueError("High, Low, and Close sequences must have identical lengths")
+
+    n = len(highs)
+    if n == 0:
+        return ATRResult(
+            tr=[],
+            atr=[],
+            atr_percent=[],
+            period=period,
+            timestamps=list(timestamps) if timestamps else None,
+        )
+
+    tr_series = calculate_true_range(highs, lows, closes)
+    atr_series: list[Optional[Decimal]] = [None] * n
+    atr_pct_series: list[Optional[Decimal]] = [None] * n
+
+    if n < period:
+        return ATRResult(
+            tr=tr_series,
+            atr=atr_series,
+            atr_percent=atr_pct_series,
+            period=period,
+            timestamps=list(timestamps) if timestamps else None,
+        )
+
+    dec_closes = [to_decimal(c) for c in closes]
+    dec_period = Decimal(str(period))
+    dec_period_minus_one = Decimal(str(period - 1))
+
+    # Initial ATR seed at index period - 1
+    seed_sum = sum((tr_series[i] for i in range(period) if tr_series[i] is not None), Decimal("0"))
+    current_atr = seed_sum / dec_period
+    atr_series[period - 1] = current_atr.quantize(Decimal("0.0001"))
+    if dec_closes[period - 1] > Decimal("0"):
+        atr_pct_series[period - 1] = ((current_atr / dec_closes[period - 1]) * Decimal("100")).quantize(Decimal("0.01"))
+    else:
+        atr_pct_series[period - 1] = Decimal("0.00")
+
+    # Wilder's smoothing for subsequent periods
+    for i in range(period, n):
+        tr_val = tr_series[i]
+        if tr_val is not None:
+            current_atr = ((current_atr * dec_period_minus_one) + tr_val) / dec_period
+            atr_series[i] = current_atr.quantize(Decimal("0.0001"))
+            if dec_closes[i] > Decimal("0"):
+                atr_pct_series[i] = ((current_atr / dec_closes[i]) * Decimal("100")).quantize(Decimal("0.01"))
+            else:
+                atr_pct_series[i] = Decimal("0.00")
+
+    return ATRResult(
+        tr=tr_series,
+        atr=atr_series,
+        atr_percent=atr_pct_series,
+        period=period,
+        timestamps=list(timestamps) if timestamps else None,
+    )
+

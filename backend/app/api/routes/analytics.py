@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.routes.market_data import get_market_data_service
 from app.api.schemas.analytics import (
+    ATRComponentSchema,
     BenchmarkMetricsSchema,
     BollingerBandsComponentSchema,
     DrawdownMetricSchema,
@@ -85,6 +86,7 @@ async def get_indicators(
     include_rsi: bool = Query(default=True, description="Whether to include RSI 14."),
     include_macd: bool = Query(default=True, description="Whether to include MACD (12, 26, 9)."),
     include_bollinger: bool = Query(default=True, description="Whether to include Bollinger Bands (20, 2.0)."),
+    include_atr: bool = Query(default=True, description="Whether to include Average True Range (ATR 14)."),
     service: AnalyticsService = Depends(get_analytics_service),
 ) -> ResponseEnvelope[IndicatorSeriesResponseSchema]:
     """Retrieve full aligned technical indicator time series dataset."""
@@ -93,6 +95,7 @@ async def get_indicators(
     include_rsi_bool = _resolve_val(include_rsi, True)
     include_macd_bool = _resolve_val(include_macd, True)
     include_bollinger_bool = _resolve_val(include_bollinger, True)
+    include_atr_bool = _resolve_val(include_atr, True)
 
     result = await service.get_technical_indicators(
         symbol=symbol,
@@ -101,6 +104,7 @@ async def get_indicators(
         include_rsi=include_rsi_bool,
         include_macd=include_macd_bool,
         include_bollinger=include_bollinger_bool,
+        include_atr=include_atr_bool,
     )
 
     macd_schema = None
@@ -128,6 +132,16 @@ async def get_indicators(
             num_std=b.num_std,
         )
 
+    atr_schema = None
+    if result.get("atr"):
+        a = result["atr"]
+        atr_schema = ATRComponentSchema(
+            tr=a.tr,
+            atr=a.atr,
+            atr_percent=a.atr_percent,
+            period=a.period,
+        )
+
     data = IndicatorSeriesResponseSchema(
         symbol=result["symbol"],
         interval=resolved_interval,
@@ -139,6 +153,7 @@ async def get_indicators(
         rsi=result["rsi"],
         macd=macd_schema,
         bollinger=bb_schema,
+        atr=atr_schema,
     )
     return ResponseEnvelope(
         data=data,

@@ -42,6 +42,7 @@ export const ENDPOINTS = {
     if (params.includeRsi !== undefined) query.set('include_rsi', String(params.includeRsi))
     if (params.includeMacd !== undefined) query.set('include_macd', String(params.includeMacd))
     if (params.includeBollinger !== undefined) query.set('include_bollinger', String(params.includeBollinger))
+    if (params.includeAtr !== undefined) query.set('include_atr', String(params.includeAtr))
     return `/api/v1/analytics/indicators/${encodeURIComponent(symbol)}?${query.toString()}`
   },
   ANALYTICS_RETURNS: (symbol, lookbackDays = 365, interval = '1d', annualizeFactor = 252, benchmark = null, riskFreeRate = 0.0) => {
