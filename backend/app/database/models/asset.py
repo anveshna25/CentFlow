@@ -17,3 +17,16 @@ class AssetModel(Base, TimestampMixin):
     is_active = Column(Boolean, nullable=False, default=True)
 
     instruments = relationship("InstrumentModel", back_populates="asset")
+
+    def to_domain(self):
+        from app.domain.models import Asset
+
+        return Asset(
+            id=self.id,
+            name=self.name,
+            asset_type=self.asset_class,
+            sector=self.sector,
+            industry=self.industry,
+            description=self.description,
+            is_active=self.is_active,
+        )

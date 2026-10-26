@@ -19,3 +19,17 @@ class ExchangeModel(Base, TimestampMixin):
     is_active = Column(Boolean, nullable=False, default=True)
 
     instruments = relationship("InstrumentModel", back_populates="exchange")
+
+    def to_domain(self):
+        from app.domain.models import Exchange
+
+        return Exchange(
+            id=self.id,
+            name=self.name,
+            code=self.code,
+            country=self.country,
+            country_code=self.country_code,
+            timezone=self.timezone,
+            currency=self.currency,
+            is_active=self.is_active,
+        )

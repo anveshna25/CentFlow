@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Optional
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.database.models.instrument import InstrumentModel
 from app.providers.base import ProviderInstrument
 from app.repositories.asset import AssetRepository
@@ -21,6 +21,84 @@ class InstrumentRepository(BaseRepository[InstrumentModel]):
         """Lookup an instrument by ticker symbol."""
         stmt = select(InstrumentModel).where(func.upper(InstrumentModel.symbol) == symbol.strip().upper())
         return self.db.scalars(stmt).first()
+
+    def get_with_relations(self, symbol_or_id: str) -> Optional[InstrumentModel]:
+        """Lookup an instrument by ID or symbol with asset, exchange, and market loaded."""
+        stmt = (
+            select(InstrumentModel)
+            .options(
+                joinedload(InstrumentModel.asset),
+                joinedload(InstrumentModel.exchange),
+                joinedload(InstrumentModel.market),
+            )
+            .where(
+                (InstrumentModel.id == symbol_or_id)
+                | (func.upper(InstrumentModel.symbol) == symbol_or_id.strip().upper())
+                | (func.upper(InstrumentModel.ticker) == symbol_or_id.strip().upper())
+            )
+        )
+        return self.db.scalars(stmt).first()
+
+    def get_by_provider_symbol(self, provider_symbol: str) -> Optional[InstrumentModel]:
+        """Lookup an instrument by provider symbol/ticker, falling back to symbol."""
+        clean = provider_symbol.strip().upper()
+        stmt = (
+            select(InstrumentModel)
+            .options(
+                joinedload(InstrumentModel.asset),
+                joinedload(InstrumentModel.exchange),
+                joinedload(InstrumentModel.market),
+            )
+            .where(
+                (func.upper(InstrumentModel.ticker) == clean)
+                | (func.upper(InstrumentModel.symbol) == clean)
+            )
+        )
+        return self.db.scalars(stmt).first()
+
+    def list_by_asset(self, asset_id: str, active_only: bool = True) -> Sequence[InstrumentModel]:
+        """List instruments belonging to a specific asset."""
+        stmt = (
+            select(InstrumentModel)
+            .options(
+                joinedload(InstrumentModel.exchange),
+                joinedload(InstrumentModel.market),
+            )
+            .where(InstrumentModel.asset_id == asset_id)
+        )
+        if active_only:
+            stmt = stmt.where(InstrumentModel.is_active == True)  # noqa: E712
+        stmt = stmt.order_by(InstrumentModel.symbol.asc())
+        return self.db.scalars(stmt).all()
+
+    def list_with_relations(
+        self,
+        asset_id: Optional[str] = None,
+        exchange_code: Optional[str] = None,
+        active_only: bool = True,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> Sequence[InstrumentModel]:
+        """List instruments with joined asset, exchange, and market relations."""
+        stmt = (
+            select(InstrumentModel)
+            .options(
+                joinedload(InstrumentModel.asset),
+                joinedload(InstrumentModel.exchange),
+                joinedload(InstrumentModel.market),
+            )
+        )
+        if asset_id:
+            stmt = stmt.where(InstrumentModel.asset_id == asset_id)
+        if active_only:
+            stmt = stmt.where(InstrumentModel.is_active == True)  # noqa: E712
+        if exchange_code:
+            from app.database.models.exchange import ExchangeModel
+            stmt = stmt.join(InstrumentModel.exchange).where(
+                func.upper(ExchangeModel.code) == exchange_code.strip().upper()
+            )
+        stmt = stmt.order_by(InstrumentModel.symbol.asc()).offset(offset).limit(limit)
+        return self.db.scalars(stmt).all()
 
     def search(self, query: str, limit: int = 50) -> Sequence[InstrumentModel]:
         """Search instruments by matching symbol or name keywords."""

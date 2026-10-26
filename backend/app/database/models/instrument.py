@@ -30,3 +30,27 @@ class InstrumentModel(Base, TimestampMixin):
     prices = relationship("PriceModel", back_populates="instrument", cascade="all, delete-orphan")
     watchlist_associations = relationship("WatchlistInstrumentModel", back_populates="instrument", cascade="all, delete-orphan")
     positions = relationship("PositionModel", back_populates="instrument")
+
+    def to_domain(self):
+        from decimal import Decimal
+        from app.domain.models import Asset, Instrument
+
+        asset_domain = self.asset.to_domain() if self.asset else Asset(
+            id=self.asset_id or self.id,
+            name=self.name,
+            asset_type="EQUITY",
+            is_active=self.is_active,
+        )
+
+        return Instrument(
+            id=self.id,
+            symbol=self.symbol,
+            name=self.name,
+            asset=asset_domain,
+            exchange=self.exchange.to_domain() if self.exchange else None,
+            market=self.market.to_domain() if self.market else None,
+            currency=self.currency or "USD",
+            provider_symbol=self.ticker or self.symbol,
+            lot_size=Decimal(str(self.lot_size)) if self.lot_size is not None else Decimal("1.0"),
+            is_active=self.is_active,
+        )
