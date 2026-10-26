@@ -100,6 +100,57 @@ class ProviderUnavailableError(ProviderError):
         )
 
 
+class ProviderTimeoutError(ProviderUnavailableError):
+    """Raised when an external market data provider request times out."""
+
+    def __init__(self, provider_name: str, message: Optional[str] = None):
+        super().__init__(
+            provider_name=provider_name,
+            message=message or f"Request to market data provider '{provider_name}' timed out.",
+        )
+        self.code = "PROVIDER_TIMEOUT"
+        self.status_code = status.HTTP_504_GATEWAY_TIMEOUT
+
+
+class ProviderRateLimitError(ProviderError):
+    """Raised when an external market data provider responds with rate limit / quota exceeded."""
+
+    def __init__(self, provider_name: str, message: Optional[str] = None, retry_after: Optional[int] = None):
+        details = [{"provider": provider_name}]
+        if retry_after is not None:
+            details[0]["retry_after"] = retry_after
+        super().__init__(
+            message=message or f"Rate limit exceeded for market data provider '{provider_name}'.",
+            code="PROVIDER_RATE_LIMIT",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            details=details,
+        )
+
+
+class ProviderResponseError(ProviderUnavailableError):
+    """Raised when an external market data provider returns an invalid, empty, or malformed payload."""
+
+    def __init__(self, provider_name: str, message: Optional[str] = None):
+        super().__init__(
+            provider_name=provider_name,
+            message=message or f"Received an invalid or malformed response from provider '{provider_name}'.",
+        )
+        self.code = "PROVIDER_RESPONSE_ERROR"
+        self.status_code = status.HTTP_502_BAD_GATEWAY
+
+
+class ProviderAuthenticationError(ProviderError):
+    """Raised when authentication or API credentials for a market data provider fail."""
+
+    def __init__(self, provider_name: str, message: Optional[str] = None):
+        super().__init__(
+            message=message or f"Authentication failed for market data provider '{provider_name}'.",
+            code="PROVIDER_AUTHENTICATION_ERROR",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            details=[{"provider": provider_name}],
+        )
+
+
 class InstrumentNotFoundError(NotFoundError):
     """Raised when a specific financial instrument/symbol is not found by a provider or database."""
 

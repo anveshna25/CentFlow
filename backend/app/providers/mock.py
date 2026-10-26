@@ -1,11 +1,13 @@
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from typing import Optional
 
 from app.core.errors import InstrumentNotFoundError
 from app.providers.base import (
     BaseMarketDataProvider,
     ProviderBar,
+    ProviderCapabilities,
     ProviderInstrument,
     ProviderQuote,
     ProviderStatus,
@@ -16,6 +18,24 @@ class MockMarketDataProvider(BaseMarketDataProvider):
     """Deterministic, simulated market data provider for local development,
     offline testing, and CI validation without third-party API dependencies.
     """
+
+    def __init__(self) -> None:
+        self._simulated_error: Optional[Exception] = None
+        self._capabilities = ProviderCapabilities(
+            supported_intervals=("1d", "1wk", "1mo"),
+            supports_search=True,
+            supports_realtime=True,
+            is_delayed=False,
+            delay_minutes=0,
+        )
+
+    def simulate_error(self, exc: Exception) -> None:
+        """Inject a simulated error for reliability and fault-tolerance testing."""
+        self._simulated_error = exc
+
+    def clear_simulated_error(self) -> None:
+        """Clear any injected simulated error."""
+        self._simulated_error = None
 
     _CATALOG: dict[str, dict] = {
         "AAPL": {
@@ -128,7 +148,14 @@ class MockMarketDataProvider(BaseMarketDataProvider):
     def name(self) -> str:
         return "mock"
 
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        return self._capabilities
+
     async def get_quote(self, symbol: str) -> ProviderQuote:
+        if self._simulated_error is not None:
+            raise self._simulated_error
+
         sym = symbol.strip().upper()
         item = self._CATALOG.get(sym)
         if not item:
@@ -160,6 +187,9 @@ class MockMarketDataProvider(BaseMarketDataProvider):
         end: datetime,
         interval: str = "1d",
     ) -> Sequence[ProviderBar]:
+        if self._simulated_error is not None:
+            raise self._simulated_error
+
         sym = symbol.strip().upper()
         item = self._CATALOG.get(sym)
         if not item:
@@ -199,6 +229,9 @@ class MockMarketDataProvider(BaseMarketDataProvider):
         return bars
 
     async def search_instruments(self, query: str) -> Sequence[ProviderInstrument]:
+        if self._simulated_error is not None:
+            raise self._simulated_error
+
         q = query.strip().lower()
         if not q:
             return []
@@ -219,8 +252,13 @@ class MockMarketDataProvider(BaseMarketDataProvider):
         return results
 
     async def get_status(self) -> ProviderStatus:
+        if self._simulated_error is not None:
+            raise self._simulated_error
+
         return ProviderStatus(
             name=self.name,
             is_active=True,
             message="Deterministic mock market data provider operational.",
+            latency_ms=0.1,
+            capabilities=self.capabilities,
         )

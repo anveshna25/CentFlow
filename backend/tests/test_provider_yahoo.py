@@ -7,8 +7,21 @@ from unittest.mock import patch
 import httpx
 
 from app.core.config import Settings
-from app.core.errors import InstrumentNotFoundError, ProviderUnavailableError
-from app.providers.base import ProviderBar, ProviderInstrument, ProviderQuote, ProviderStatus
+from app.core.errors import (
+    InstrumentNotFoundError,
+    ProviderAuthenticationError,
+    ProviderRateLimitError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
+from app.providers.base import (
+    ProviderBar,
+    ProviderCapabilities,
+    ProviderInstrument,
+    ProviderQuote,
+    ProviderStatus,
+)
 from app.providers.registry import ProviderRegistry
 from app.providers.yahoo import YahooMarketDataProvider
 
@@ -237,6 +250,63 @@ class TestYahooMarketDataProvider(unittest.IsolatedAsyncioTestCase):
         results = await provider.search_instruments("   ")
         self.assertEqual(results, [])
         await provider.close()
+
+    def test_yahoo_capabilities(self) -> None:
+        """Yahoo provider should declare supported intervals, delayed flag, and search support."""
+        provider = YahooMarketDataProvider()
+        caps = provider.capabilities
+        self.assertIsInstance(caps, ProviderCapabilities)
+        self.assertIn("1d", caps.supported_intervals)
+        self.assertIn("1wk", caps.supported_intervals)
+        self.assertTrue(caps.is_delayed)
+        self.assertEqual(caps.delay_minutes, 15)
+        self.assertTrue(caps.supports_search)
+
+    async def test_get_quote_rate_limit_429(self) -> None:
+        """ProviderRateLimitError should be raised when Yahoo returns HTTP 429."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, text="Too Many Requests")
+
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            provider = YahooMarketDataProvider(client=client)
+            with self.assertRaises(ProviderRateLimitError) as ctx:
+                await provider.get_quote("AAPL")
+            self.assertEqual(ctx.exception.status_code, 429)
+            self.assertEqual(ctx.exception.code, "PROVIDER_RATE_LIMIT")
+
+    async def test_get_quote_auth_error_401(self) -> None:
+        """ProviderAuthenticationError should be raised when Yahoo returns HTTP 401."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, text="Unauthorized")
+
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            provider = YahooMarketDataProvider(client=client)
+            with self.assertRaises(ProviderAuthenticationError):
+                await provider.get_quote("AAPL")
+
+    async def test_get_quote_timeout(self) -> None:
+        """ProviderTimeoutError should be raised when request times out."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ReadTimeout("Read timed out", request=request)
+
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            provider = YahooMarketDataProvider(client=client)
+            with self.assertRaises(ProviderTimeoutError):
+                await provider.get_quote("AAPL")
+
+    async def test_get_quote_malformed_response(self) -> None:
+        """ProviderResponseError should be raised when response body is not parseable."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, text="Not a valid json")
+
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            provider = YahooMarketDataProvider(client=client)
+            with self.assertRaises(ProviderResponseError):
+                await provider.get_quote("AAPL")
 
     def test_provider_registered_in_registry(self) -> None:
         """YahooMarketDataProvider should be registered in ProviderRegistry under 'yahoo'."""

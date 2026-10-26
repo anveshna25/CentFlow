@@ -44,12 +44,24 @@ class InstrumentResponseSchema(BaseSchema):
     market: Optional[str] = Field(default=None, description="Market grouping.")
 
 
+class ProviderCapabilitiesSchema(BaseSchema):
+    """Operational capabilities schema for a market data provider."""
+
+    supported_intervals: list[str] = Field(default_factory=lambda: ["1d"], description="Supported timeframe bar intervals.")
+    supports_search: bool = Field(default=True, description="Whether instrument search is supported.")
+    supports_realtime: bool = Field(default=True, description="Whether real-time data is supported.")
+    is_delayed: bool = Field(default=False, description="Whether quotes/bars are delayed.")
+    delay_minutes: int = Field(default=0, description="Delay duration in minutes if delayed.")
+
+
 class ProviderStatusSchema(BaseSchema):
     """Market data provider diagnostic status schema."""
 
     name: str = Field(..., description="Provider identifier.")
     is_active: bool = Field(..., description="Whether provider is online and operational.")
     message: Optional[str] = Field(default=None, description="Optional diagnostic message.")
+    latency_ms: Optional[float] = Field(default=None, description="Round-trip latency in milliseconds.")
+    capabilities: Optional[ProviderCapabilitiesSchema] = Field(default=None, description="Provider capabilities.")
 
 
 class PersistedPriceSchema(BaseSchema):

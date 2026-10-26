@@ -1,6 +1,7 @@
 from app.providers.base import (
     BaseMarketDataProvider,
     ProviderBar,
+    ProviderCapabilities,
     ProviderInstrument,
     ProviderQuote,
     ProviderStatus,
@@ -16,6 +17,7 @@ ProviderRegistry.register("yahoo", YahooMarketDataProvider)
 
 __all__ = [
     "BaseMarketDataProvider",
+    "ProviderCapabilities",
     "ProviderQuote",
     "ProviderBar",
     "ProviderInstrument",
