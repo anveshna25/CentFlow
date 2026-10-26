@@ -12,6 +12,7 @@ class ProviderCapabilities:
 
     supported_intervals: tuple[str, ...] = ("1d",)
     supports_search: bool = True
+    supports_lookup: bool = True
     supports_realtime: bool = True
     is_delayed: bool = False
     delay_minutes: int = 0
@@ -57,6 +58,9 @@ class ProviderInstrument:
     currency: Optional[str] = None
     exchange: Optional[str] = None
     market: Optional[str] = None
+    country: Optional[str] = None
+    sector: Optional[str] = None
+    industry: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -108,6 +112,15 @@ class BaseMarketDataProvider(ABC):
     async def search_instruments(self, query: str) -> Sequence[ProviderInstrument]:
         """Search instruments matching the query string by symbol or name."""
         pass
+
+    async def lookup_asset(self, symbol: str) -> Optional[ProviderInstrument]:
+        """Look up canonical instrument/asset record for a specific ticker symbol."""
+        clean = symbol.strip().upper()
+        results = await self.search_instruments(clean)
+        for item in results:
+            if item.symbol.strip().upper() == clean:
+                return item
+        return results[0] if results else None
 
     @abstractmethod
     async def get_status(self) -> ProviderStatus:

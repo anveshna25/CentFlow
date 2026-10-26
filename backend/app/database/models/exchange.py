@@ -27,6 +27,7 @@ class ExchangeModel(Base, TimestampMixin):
             id=self.id,
             name=self.name,
             code=self.code,
+            mic=self.mic,
             country=self.country,
             country_code=self.country_code,
             timezone=self.timezone,

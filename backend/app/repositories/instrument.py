@@ -125,6 +125,13 @@ class InstrumentRepository(BaseRepository[InstrumentModel]):
         )
         return self.db.scalars(stmt).all()
 
+    def count_instruments(self, active_only: bool = False) -> int:
+        """Count total instruments in the database, optionally filtering by active state."""
+        stmt = select(func.count(InstrumentModel.id))
+        if active_only:
+            stmt = stmt.where(InstrumentModel.is_active == True)  # noqa: E712
+        return self.db.scalar(stmt) or 0
+
     def get_or_create_from_provider(
         self,
         provider_inst: ProviderInstrument,

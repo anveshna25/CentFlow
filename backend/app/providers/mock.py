@@ -44,6 +44,8 @@ class MockMarketDataProvider(BaseMarketDataProvider):
             "currency": "USD",
             "exchange": "NASDAQ",
             "market": "US Equities",
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
             "price": Decimal("185.50"),
             "open": Decimal("184.20"),
             "high": Decimal("186.10"),
@@ -57,6 +59,8 @@ class MockMarketDataProvider(BaseMarketDataProvider):
             "currency": "USD",
             "exchange": "NASDAQ",
             "market": "US Equities",
+            "sector": "Technology",
+            "industry": "Software—Infrastructure",
             "price": Decimal("420.25"),
             "open": Decimal("418.00"),
             "high": Decimal("422.50"),
@@ -70,6 +74,8 @@ class MockMarketDataProvider(BaseMarketDataProvider):
             "currency": "USD",
             "exchange": "NASDAQ",
             "market": "US Equities",
+            "sector": "Technology",
+            "industry": "Internet Content & Information",
             "price": Decimal("175.80"),
             "open": Decimal("174.50"),
             "high": Decimal("176.90"),
@@ -83,6 +89,8 @@ class MockMarketDataProvider(BaseMarketDataProvider):
             "currency": "USD",
             "exchange": "Coinbase",
             "market": "Crypto",
+            "sector": "Cryptocurrency",
+            "industry": "Digital Assets",
             "price": Decimal("65400.00"),
             "open": Decimal("64200.00"),
             "high": Decimal("66100.00"),
@@ -96,6 +104,8 @@ class MockMarketDataProvider(BaseMarketDataProvider):
             "currency": "USD",
             "exchange": "Coinbase",
             "market": "Crypto",
+            "sector": "Cryptocurrency",
+            "industry": "Digital Assets",
             "price": Decimal("3450.00"),
             "open": Decimal("3400.00"),
             "high": Decimal("3510.00"),
@@ -250,6 +260,27 @@ class MockMarketDataProvider(BaseMarketDataProvider):
                     )
                 )
         return results
+
+    async def lookup_asset(self, symbol: str) -> Optional[ProviderInstrument]:
+        if self._simulated_error is not None:
+            raise self._simulated_error
+
+        sym = symbol.strip().upper()
+        item = self._CATALOG.get(sym)
+        if not item:
+            return None
+
+        return ProviderInstrument(
+            symbol=sym,
+            name=item["name"],
+            asset_type=item["asset_type"],
+            currency=item["currency"],
+            exchange=item.get("exchange"),
+            market=item.get("market"),
+            country="US" if item.get("exchange") in ("NASDAQ", "NYSE") else "Global",
+            sector=item.get("sector"),
+            industry=item.get("industry"),
+        )
 
     async def get_status(self) -> ProviderStatus:
         if self._simulated_error is not None:

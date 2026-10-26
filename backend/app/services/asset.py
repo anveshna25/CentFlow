@@ -213,14 +213,14 @@ class AssetMasterService:
     def get_summary(self) -> AssetMasterSummary:
         """Return master data catalog summary metrics."""
         total_assets = self.asset_repo.count_assets()
-        all_instruments = self.instrument_repo.list_with_relations(limit=10000)
-        active_instruments = sum(1 for i in all_instruments if i.is_active)
+        total_instruments = self.instrument_repo.count_instruments(active_only=False)
+        active_instruments = self.instrument_repo.count_instruments(active_only=True)
         sectors = self.asset_repo.list_sectors()
         asset_classes = self.asset_repo.list_asset_classes()
 
         return AssetMasterSummary(
             total_assets=total_assets,
-            total_instruments=len(all_instruments),
+            total_instruments=total_instruments,
             active_instruments=active_instruments,
             sectors=sectors,
             asset_classes=asset_classes,
