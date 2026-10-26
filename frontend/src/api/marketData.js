@@ -23,6 +23,13 @@ export async function getQuote(symbol) {
 }
 
 /**
+ * Fetch batch of normalized quotes for multiple instrument symbols in a single request.
+ */
+export async function getQuotes(symbols) {
+  return apiClient(ENDPOINTS.MARKET_DATA_QUOTES(symbols))
+}
+
+/**
  * Fetch historical OHLCV bars for an instrument symbol.
  */
 export async function getHistoricalBars(symbol, days = 30, interval = '1d') {
@@ -30,10 +37,10 @@ export async function getHistoricalBars(symbol, days = 30, interval = '1d') {
 }
 
 /**
- * Search or filter available instruments.
+ * Search or filter available instruments by keyword and optional asset category.
  */
-export async function searchInstruments(query = '') {
-  return apiClient(ENDPOINTS.MARKET_DATA_INSTRUMENTS(query))
+export async function searchInstruments(query = '', assetType = '') {
+  return apiClient(ENDPOINTS.MARKET_DATA_INSTRUMENTS(query, assetType))
 }
 
 /**

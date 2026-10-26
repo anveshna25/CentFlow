@@ -58,6 +58,7 @@ class MarketDataService:
         else:
             self._provider = raw_provider
 
+        self._db = db
         self._quote_service = QuoteService(provider=self._provider, enable_cache=False)
         self._history_service = HistoryService(provider=self._provider)
 
@@ -221,11 +222,64 @@ class MarketDataService:
             interval=interval,
         )
 
-    async def search_instruments(self, query: str) -> Sequence[ProviderInstrument]:
-        """Search available instruments matching a symbol or name query."""
-        if not query or not query.strip():
+    async def search_instruments(
+        self,
+        query: str = "",
+        asset_type: Optional[str] = None,
+    ) -> Sequence[ProviderInstrument]:
+        """Search available instruments matching a symbol, name, or asset type query."""
+        clean_q = (query or "").strip()
+        clean_type = (asset_type or "").strip().lower() if asset_type else None
+        if clean_type == "all":
+            clean_type = None
+
+        if not clean_q and not clean_type:
             return []
-        return await self._provider.search_instruments(query.strip())
+
+        results: list[ProviderInstrument] = []
+        try:
+            provider_results = await self._provider.search_instruments(clean_q, asset_type=clean_type)
+            results.extend(provider_results)
+        except Exception:
+            pass
+
+        # Fallback to local instrument catalog in database if provider yielded no results and db is present
+        if not results and self._db is not None:
+            try:
+                from app.repositories.instrument import InstrumentRepository
+                inst_repo = InstrumentRepository(self._db)
+                if clean_q:
+                    db_instruments = inst_repo.search(clean_q, limit=50)
+                else:
+                    db_instruments = inst_repo.list_with_relations(active_only=True, limit=50)
+
+                for inst in db_instruments:
+                    inst_type = inst.asset.asset_class.lower() if inst.asset else "equity"
+                    if clean_type and inst_type != clean_type:
+                        continue
+                    results.append(
+                        ProviderInstrument(
+                            symbol=inst.symbol,
+                            name=inst.name,
+                            asset_type=inst_type,
+                            currency=inst.currency,
+                            exchange=inst.exchange.code if inst.exchange else None,
+                            market=inst.market.name if inst.market else None,
+                        )
+                    )
+            except Exception:
+                pass
+
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        deduped: list[ProviderInstrument] = []
+        for item in results:
+            sym_key = item.symbol.strip().upper()
+            if sym_key not in seen:
+                seen.add(sym_key)
+                deduped.append(item)
+
+        return deduped
 
     async def lookup_asset(self, symbol: str) -> Optional[ProviderInstrument]:
         """Fetch canonical instrument record for a specific symbol directly from provider."""

@@ -257,13 +257,23 @@ class YahooMarketDataProvider(BaseMarketDataProvider):
         except (ValueError, KeyError, IndexError) as exc:
             raise ProviderResponseError("yahoo", f"Malformed history payload from Yahoo Finance: {exc}") from exc
 
-    async def search_instruments(self, query: str) -> Sequence[ProviderInstrument]:
-        """Search instruments by ticker symbol or corporate name."""
-        clean_query = query.strip()
-        if not clean_query:
+    async def search_instruments(
+        self,
+        query: str = "",
+        asset_type: Optional[str] = None,
+    ) -> Sequence[ProviderInstrument]:
+        """Search instruments by ticker symbol or corporate name, optionally filtering by asset type."""
+        clean_query = (query or "").strip()
+        clean_type = (asset_type or "").strip().lower()
+        if clean_type == "all":
+            clean_type = ""
+
+        if not clean_query and not clean_type:
             return []
 
-        url = f"{self._base_url}/v1/finance/search?q={quote_plus(clean_query)}&quotesCount=10&newsCount=0"
+        search_term = clean_query if clean_query else ("crypto" if clean_type in ("crypto", "cryptocurrency") else clean_type)
+
+        url = f"{self._base_url}/v1/finance/search?q={quote_plus(search_term)}&quotesCount=15&newsCount=0"
         client = self._get_client()
 
         try:
@@ -300,7 +310,17 @@ class YahooMarketDataProvider(BaseMarketDataProvider):
                     "index": "index",
                     "future": "future",
                 }
-                asset_type = type_map.get(quote_type, "equity")
+                inst_asset_type = type_map.get(quote_type, "equity")
+
+                # Filter by target asset class if specified
+                if clean_type:
+                    target_matches = (
+                        inst_asset_type == clean_type
+                        or (clean_type in ("crypto", "cryptocurrency") and inst_asset_type in ("crypto", "cryptocurrency"))
+                    )
+                    if not target_matches:
+                        continue
+
                 exchange = item.get("exchange")
                 market = item.get("dispExchange") or exchange
 
@@ -308,7 +328,7 @@ class YahooMarketDataProvider(BaseMarketDataProvider):
                     ProviderInstrument(
                         symbol=sym,
                         name=name,
-                        asset_type=asset_type,
+                        asset_type=inst_asset_type,
                         currency="USD",
                         exchange=exchange,
                         market=market,

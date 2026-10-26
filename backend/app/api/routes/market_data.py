@@ -225,15 +225,30 @@ async def get_historical_bars(
 
 @router.get("/instruments", response_model=ResponseEnvelope[list[InstrumentResponseSchema]])
 async def search_instruments(
-    q: Optional[str] = Query(default=None, description="Search term for symbol or name"),
+    q: Optional[str] = Query(default=None, description="Search term for symbol, name, or exchange"),
+    asset_type: Optional[str] = Query(default=None, description="Filter by asset class: equity, crypto, etf"),
     service: MarketDataService = Depends(get_market_data_service),
 ) -> ResponseEnvelope[list[InstrumentResponseSchema]]:
     """Search and filter available financial instruments."""
-    results = await service.search_instruments(q or "")
+    clean_q = q.strip() if isinstance(q, str) else ""
+    clean_type = asset_type.strip().lower() if isinstance(asset_type, str) else None
+    if clean_type == "all":
+        clean_type = None
+
+    meta_q = q if isinstance(q, str) else None
+    meta_type = asset_type if isinstance(asset_type, str) else None
+
+    if not clean_q and not clean_type:
+        return ResponseEnvelope(
+            data=[],
+            meta={"query": meta_q, "asset_type": meta_type, "count": 0},
+        )
+
+    results = await service.search_instruments(query=clean_q, asset_type=clean_type)
     data = [InstrumentResponseSchema(**asdict(item)) for item in results]
     return ResponseEnvelope(
         data=data,
-        meta={"query": q, "count": len(data)},
+        meta={"query": meta_q, "asset_type": meta_type, "count": len(data)},
     )
 
 
