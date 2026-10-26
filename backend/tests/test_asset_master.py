@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal
 import unittest
 from fastapi.testclient import TestClient
@@ -9,10 +10,12 @@ from app.database.models import AssetModel, Base, ExchangeModel, InstrumentModel
 from app.database.session import get_db
 from app.domain.models import Asset, Exchange, Instrument, Market
 from app.main import create_app
+from app.providers.mock import MockMarketDataProvider
 from app.repositories.asset import AssetRepository
 from app.repositories.exchange import ExchangeRepository
 from app.repositories.instrument import InstrumentRepository
 from app.services.asset import AssetMasterService
+from app.services.market_data import MarketDataService
 
 
 class TestAssetMasterDataModel(unittest.TestCase):
@@ -36,12 +39,14 @@ class TestAssetMasterDataModel(unittest.TestCase):
             id="exc-1",
             name="NASDAQ Stock Market",
             code="NASDAQ",
+            mic="XNAS",
             country="US",
             country_code="US",
             timezone="America/New_York",
             currency="USD",
         )
         self.assertEqual(exchange.code, "NASDAQ")
+        self.assertEqual(exchange.mic, "XNAS")
 
         market = Market(
             id="mkt-1",
@@ -67,6 +72,11 @@ class TestAssetMasterDataModel(unittest.TestCase):
         self.assertEqual(instrument.asset.name, "Apple Inc.")
         self.assertEqual(instrument.exchange.code, "NASDAQ")
         self.assertEqual(instrument.market.code, "US_EQ")
+        self.assertEqual(instrument.asset_type, "equity")
+        self.assertEqual(instrument.sector, "Technology")
+        self.assertEqual(instrument.industry, "Consumer Electronics")
+        self.assertEqual(instrument.country, "US")
+        self.assertEqual(instrument.status, "active")
 
     def test_db_model_to_domain_mapping(self):
         asset_model = AssetModel(
@@ -88,11 +98,13 @@ class TestAssetMasterDataModel(unittest.TestCase):
             id="exc-db-1",
             code="NASDAQ",
             name="NASDAQ",
+            mic="XNAS",
             country="US",
             currency="USD",
         )
         exc_domain = exchange_model.to_domain()
         self.assertEqual(exc_domain.code, "NASDAQ")
+        self.assertEqual(exc_domain.mic, "XNAS")
 
         market_model = MarketModel(
             id="mkt-db-1",
@@ -277,6 +289,35 @@ class TestAssetMasterServiceAndRepository(unittest.TestCase):
         self.assertIn("Technology", summary.sectors)
         self.assertIn("Energy", summary.sectors)
 
+    def test_instrument_repo_count_instruments(self):
+        repo = InstrumentRepository(self.db)
+        self.assertEqual(repo.count_instruments(), 0)
+
+        self.service.register_instrument(
+            symbol="NVDA",
+            name="Nvidia",
+            asset_name="Nvidia",
+            asset_class="equity",
+        )
+        self.assertEqual(repo.count_instruments(), 1)
+        self.assertEqual(repo.count_instruments(active_only=True), 1)
+
+    def test_provider_lookup_asset(self):
+        provider = MockMarketDataProvider()
+        service = MarketDataService(provider=provider, enable_cache=False)
+
+        # Lookup existing instrument
+        aapl = asyncio.run(service.lookup_asset("AAPL"))
+        self.assertIsNotNone(aapl)
+        self.assertEqual(aapl.symbol, "AAPL")
+        self.assertEqual(aapl.asset_type, "equity")
+        self.assertEqual(aapl.exchange, "NASDAQ")
+        self.assertEqual(aapl.sector, "Technology")
+
+        # Lookup unknown instrument
+        unknown = asyncio.run(service.lookup_asset("UNKNOWN_SYM"))
+        self.assertIsNone(unknown)
+
 
 class TestAssetMasterApiRoutes(unittest.TestCase):
     """Test suite covering FastAPI HTTP endpoints for Asset Master."""
@@ -378,10 +419,14 @@ class TestAssetMasterApiRoutes(unittest.TestCase):
         self.assertEqual(body["data"]["symbol"], "AAPL")
         self.assertEqual(body["data"]["asset"]["name"], "Apple Inc.")
         self.assertEqual(body["data"]["exchange"]["code"], "NASDAQ")
+        self.assertEqual(body["data"]["asset_type"], "equity")
+        self.assertEqual(body["data"]["sector"], "Technology")
+        self.assertEqual(body["data"]["status"], "active")
 
         # 404 for unknown instrument
         not_found = self.client.get("/api/v1/assets/instruments/NONEXISTENT")
         self.assertEqual(not_found.status_code, 404)
+        self.assertEqual(not_found.json()["error"]["code"], "RESOURCE_NOT_FOUND")
 
     def test_get_asset_by_id_endpoint(self):
         asset_id = self.inst_aapl.asset.id

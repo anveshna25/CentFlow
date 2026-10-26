@@ -25,6 +25,7 @@ class Exchange:
     id: str
     name: str
     code: Optional[str] = None
+    mic: Optional[str] = None
     country: Optional[str] = None
     country_code: Optional[str] = None
     timezone: Optional[str] = None
@@ -58,6 +59,33 @@ class Instrument:
     provider_symbol: Optional[str] = None
     lot_size: Decimal = Decimal("1.0")
     is_active: bool = True
+
+    @property
+    def asset_type(self) -> str:
+        """Asset class classification derived from underlying asset."""
+        return self.asset.asset_type if self.asset else "equity"
+
+    @property
+    def sector(self) -> Optional[str]:
+        """Industry sector derived from underlying asset."""
+        return self.asset.sector if self.asset else None
+
+    @property
+    def industry(self) -> Optional[str]:
+        """Industry subcategory derived from underlying asset."""
+        return self.asset.industry if self.asset else None
+
+    @property
+    def country(self) -> Optional[str]:
+        """Domicile or trading country derived from exchange or asset."""
+        if self.exchange and self.exchange.country:
+            return self.exchange.country
+        return self.asset.country if self.asset else None
+
+    @property
+    def status(self) -> str:
+        """Normalized operational status ('active' or 'inactive')."""
+        return "active" if self.is_active else "inactive"
 
 
 @dataclass

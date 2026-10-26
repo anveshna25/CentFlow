@@ -128,6 +128,21 @@ class CachedMarketDataProvider(BaseMarketDataProvider):
             ttl_seconds=self._search_ttl,
         )
 
+    async def lookup_asset(self, symbol: str) -> Optional[ProviderInstrument]:
+        """Fetch asset lookup record with long-lived TTL caching."""
+        clean_symbol = symbol.strip().upper()
+        if not clean_symbol:
+            return None
+        if not self._enabled:
+            return await self._provider.lookup_asset(clean_symbol)
+
+        cache_key = f"lookup:{clean_symbol}"
+        return await self._cache.get_or_set(
+            key=cache_key,
+            factory=lambda: self._provider.lookup_asset(clean_symbol),
+            ttl_seconds=self._search_ttl,
+        )
+
     async def get_status(self) -> ProviderStatus:
         """Check status of underlying provider without caching (live bypass)."""
         return await self._provider.get_status()

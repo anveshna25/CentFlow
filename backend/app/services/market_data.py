@@ -95,6 +95,12 @@ class MarketDataService:
             return []
         return await self._provider.search_instruments(query.strip())
 
+    async def lookup_asset(self, symbol: str) -> Optional[ProviderInstrument]:
+        """Fetch canonical instrument record for a specific symbol directly from provider."""
+        if not symbol or not symbol.strip():
+            return None
+        return await self._provider.lookup_asset(symbol.strip().upper())
+
     async def get_provider_status(self) -> ProviderStatus:
         """Check provider connectivity and operational status."""
         return await self._provider.get_status()

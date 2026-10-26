@@ -1,7 +1,7 @@
 """API routes for canonical assets and instruments (Asset Master)."""
 
-from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.schemas.asset import (
@@ -14,6 +14,7 @@ from app.api.schemas.asset import (
     MarketSchema,
 )
 from app.api.schemas.base import PaginatedResponse, PaginationMeta, ResponseEnvelope
+from app.core.errors import InstrumentNotFoundError, NotFoundError
 from app.database.session import get_db
 from app.domain.models import Asset, Instrument
 from app.services.asset import AssetMasterService
@@ -24,13 +25,6 @@ router = APIRouter(prefix="/assets", tags=["assets"])
 def get_asset_master_service(db: Session = Depends(get_db)) -> AssetMasterService:
     """Dependency injector for AssetMasterService."""
     return AssetMasterService(db=db)
-
-
-def _resolve_val(val: Any, default: Any = None) -> Any:
-    """Helper to unwrap FastAPI Query default if invoked as a plain function in tests."""
-    if hasattr(val, "default"):
-        return val.default
-    return val if val is not None else default
 
 
 def _to_asset_schema(asset: Asset) -> AssetSchema:
@@ -51,8 +45,14 @@ def _to_instrument_schema(inst: Instrument) -> InstrumentDetailSchema:
         id=inst.id,
         symbol=inst.symbol,
         name=inst.name,
+        asset_type=inst.asset_type,
+        exchange_code=inst.exchange.code if inst.exchange else None,
         currency=inst.currency,
         provider_symbol=inst.provider_symbol,
+        country=inst.country,
+        sector=inst.sector,
+        industry=inst.industry,
+        status=inst.status,
         lot_size=float(inst.lot_size),
         is_active=inst.is_active,
         asset=_to_asset_schema(inst.asset),
@@ -60,6 +60,7 @@ def _to_instrument_schema(inst: Instrument) -> InstrumentDetailSchema:
             id=inst.exchange.id,
             name=inst.exchange.name,
             code=inst.exchange.code,
+            mic=inst.exchange.mic,
             country=inst.exchange.country,
             country_code=inst.exchange.country_code,
             timezone=inst.exchange.timezone,
@@ -88,30 +89,23 @@ async def list_assets(
     service: AssetMasterService = Depends(get_asset_master_service),
 ) -> PaginatedResponse[AssetSchema]:
     """List canonical assets with optional filtering and pagination."""
-    resolved_class = _resolve_val(asset_class, None)
-    resolved_sector = _resolve_val(sector, None)
-    resolved_query = _resolve_val(query, None)
-    resolved_active = _resolve_val(is_active, None)
-    resolved_offset = _resolve_val(offset, 0)
-    resolved_limit = _resolve_val(limit, 50)
-
     assets, total = service.list_assets(
-        asset_class=resolved_class,
-        sector=resolved_sector,
-        query=resolved_query,
-        is_active=resolved_active,
-        offset=resolved_offset,
-        limit=resolved_limit,
+        asset_class=asset_class,
+        sector=sector,
+        query=query,
+        is_active=is_active,
+        offset=offset,
+        limit=limit,
     )
 
     data = [_to_asset_schema(a) for a in assets]
     return PaginatedResponse(
         data=data,
         pagination=PaginationMeta(
-            limit=resolved_limit,
-            offset=resolved_offset,
+            limit=limit,
+            offset=offset,
             total=total,
-            has_next=(resolved_offset + len(data)) < total,
+            has_next=(offset + len(data)) < total,
         ),
     )
 
@@ -162,11 +156,11 @@ async def list_instruments(
 ) -> ResponseEnvelope[list[InstrumentDetailSchema]]:
     """List instruments with joined asset, exchange, and market relations."""
     instruments = service.list_instruments(
-        asset_id=_resolve_val(asset_id, None),
-        exchange_code=_resolve_val(exchange, None),
-        active_only=_resolve_val(active_only, True),
-        offset=_resolve_val(offset, 0),
-        limit=_resolve_val(limit, 100),
+        asset_id=asset_id,
+        exchange_code=exchange,
+        active_only=active_only,
+        offset=offset,
+        limit=limit,
     )
     return ResponseEnvelope(data=[_to_instrument_schema(i) for i in instruments])
 
@@ -179,10 +173,7 @@ async def get_instrument(
     """Retrieve canonical instrument details by symbol or provider symbol."""
     inst = service.resolve_symbol(symbol)
     if not inst:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Instrument '{symbol}' not found in Asset Master",
-        )
+        raise InstrumentNotFoundError(symbol)
     return ResponseEnvelope(data=_to_instrument_schema(inst))
 
 
@@ -194,10 +185,7 @@ async def get_asset(
     """Retrieve canonical asset along with its associated tradable instruments."""
     result = service.get_asset_with_instruments(asset_id)
     if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset '{asset_id}' not found in Asset Master",
-        )
+        raise NotFoundError("Asset", asset_id)
     asset, instruments = result
     return ResponseEnvelope(
         data=AssetDetailResponseSchema(
@@ -221,8 +209,6 @@ async def enrich_asset(
         description=payload.description,
     )
     if not updated:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset '{asset_id}' not found to enrich",
-        )
+        raise NotFoundError("Asset", asset_id)
     return ResponseEnvelope(data=_to_asset_schema(updated))
+
