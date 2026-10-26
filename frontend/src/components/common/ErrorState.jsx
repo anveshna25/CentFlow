@@ -1,3 +1,5 @@
+import { Button } from './Button'
+
 /**
  * Maps technical error codes or strings to user-friendly messages.
  * Prevents leaking raw internal stack traces, database syntax, or unhandled errors.
@@ -91,24 +93,14 @@ export function ErrorState({
           )}
         </div>
         {onRetry && (
-          <button
+          <Button
             id={`${id}-retry-btn`}
             onClick={onRetry}
-            style={{
-              background: 'rgba(239, 68, 68, 0.2)',
-              color: 'var(--cf-bearish)',
-              border: '1px solid var(--cf-bearish-border)',
-              borderRadius: 'var(--cf-radius-sm)',
-              padding: '4px 12px',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'background var(--cf-transition-fast)',
-            }}
+            variant="danger"
+            size="sm"
           >
             {retryLabel}
-          </button>
+          </Button>
         )}
       </div>
     )
@@ -212,43 +204,24 @@ export function ErrorState({
           }}
         >
           {onRetry && (
-            <button
+            <Button
               id={`${id}-retry-btn`}
               onClick={onRetry}
-              style={{
-                background: 'var(--cf-brand-primary)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 'var(--cf-radius-md)',
-                padding: '8px 18px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'background var(--cf-transition-fast)',
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.background = 'var(--cf-brand-primary-hover)')}
-              onMouseOut={(e) => (e.currentTarget.style.background = 'var(--cf-brand-primary)')}
+              variant="primary"
+              size="md"
             >
               {retryLabel}
-            </button>
+            </Button>
           )}
           {secondaryAction && (
-            <button
+            <Button
               id={`${id}-secondary-btn`}
               onClick={secondaryAction.onClick}
-              style={{
-                background: 'var(--cf-bg-surface-elevated)',
-                color: 'var(--cf-text-secondary)',
-                border: '1px solid var(--cf-border)',
-                borderRadius: 'var(--cf-radius-md)',
-                padding: '8px 16px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
+              variant="secondary"
+              size="md"
             >
               {secondaryAction.label}
-            </button>
+            </Button>
           )}
         </div>
       )}
