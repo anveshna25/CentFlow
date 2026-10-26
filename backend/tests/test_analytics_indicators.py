@@ -2,11 +2,14 @@ from decimal import Decimal
 import unittest
 
 from app.analytics import (
+    ATRResult,
+    calculate_atr,
     calculate_bollinger_bands,
     calculate_ema,
     calculate_macd,
     calculate_rsi,
     calculate_sma,
+    calculate_true_range,
 )
 
 
@@ -192,6 +195,60 @@ class TestAnalyticsIndicators(unittest.TestCase):
 
         short_bb = calculate_bollinger_bands([Decimal("100")] * 5, window=20)
         self.assertEqual(short_bb.middle_band, [None] * 5)
+
+    def test_calculate_true_range(self):
+        highs = [Decimal("50"), Decimal("55"), Decimal("48"), Decimal("45"), Decimal("50")]
+        lows = [Decimal("40"), Decimal("48"), Decimal("38"), Decimal("41"), Decimal("44")]
+        closes = [Decimal("45"), Decimal("52"), Decimal("40"), Decimal("43"), Decimal("48")]
+
+        tr = calculate_true_range(highs, lows, closes)
+        self.assertEqual(len(tr), 5)
+        self.assertEqual(tr[0], Decimal("10.0000"))  # High - Low: 50 - 40 = 10
+        self.assertEqual(tr[1], Decimal("10.0000"))  # max(55-48, 55-45, |48-45|) = 10
+        self.assertEqual(tr[2], Decimal("14.0000"))  # gap down: max(48-38, |48-52|, |38-52|) = 14
+        self.assertEqual(tr[3], Decimal("5.0000"))   # max(45-41, 45-40, |41-40|) = 5
+        self.assertEqual(tr[4], Decimal("7.0000"))   # max(50-44, 50-43, |44-43|) = 7
+
+        # Empty
+        self.assertEqual(calculate_true_range([], [], []), [])
+
+        # Length mismatch
+        with self.assertRaises(ValueError):
+            calculate_true_range([10], [5], [])
+
+    def test_calculate_atr(self):
+        highs = [Decimal("50"), Decimal("55"), Decimal("48"), Decimal("45"), Decimal("50")]
+        lows = [Decimal("40"), Decimal("48"), Decimal("38"), Decimal("41"), Decimal("44")]
+        closes = [Decimal("45"), Decimal("52"), Decimal("40"), Decimal("43"), Decimal("48")]
+
+        # Period = 3
+        atr_res = calculate_atr(highs, lows, closes, period=3)
+        self.assertEqual(len(atr_res.atr), 5)
+        self.assertIsNone(atr_res.atr[0])
+        self.assertIsNone(atr_res.atr[1])
+
+        # Seed ATR at index 2: SMA(10, 10, 14) = 34 / 3 = 11.3333
+        self.assertEqual(atr_res.atr[2], Decimal("11.3333"))
+        # ATR% at index 2: (11.3333 / 40) * 100 = 28.33%
+        self.assertEqual(atr_res.atr_percent[2], Decimal("28.33"))
+
+        # Subsequent periods smoothed with Wilder:
+        # ATR_3 = (11.333333... * 2 + 5) / 3 = 9.2222
+        self.assertEqual(atr_res.atr[3], Decimal("9.2222"))
+        # ATR_4 = (9.222222... * 2 + 7) / 3 = 8.4815
+        self.assertEqual(atr_res.atr[4], Decimal("8.4815"))
+
+        # Period < 1 error
+        with self.assertRaises(ValueError):
+            calculate_atr(highs, lows, closes, period=0)
+
+        # Length < period returns None
+        short_res = calculate_atr(highs[:2], lows[:2], closes[:2], period=5)
+        self.assertEqual(short_res.atr, [None, None])
+
+        # Empty input
+        empty_res = calculate_atr([], [], [], period=14)
+        self.assertEqual(empty_res.atr, [])
 
 
 if __name__ == "__main__":

@@ -44,6 +44,7 @@ class TestAnalyticsApiRoutes(unittest.IsolatedAsyncioTestCase):
             include_rsi=True,
             include_macd=True,
             include_bollinger=True,
+            include_atr=True,
             service=self.service,
         )
         self.assertIsInstance(envelope, ResponseEnvelope)
@@ -53,6 +54,8 @@ class TestAnalyticsApiRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(envelope.data.macd)
         self.assertIsNotNone(envelope.data.bollinger)
         self.assertIsNotNone(envelope.data.rsi)
+        self.assertIsNotNone(envelope.data.atr)
+        self.assertGreater(len(envelope.data.atr.atr), 0)
 
     async def test_get_returns_analysis_route(self):
         envelope = await get_returns_analysis(symbol="AAPL", lookback_days=30, service=self.service)
@@ -117,7 +120,7 @@ class TestAnalyticsHttpIntegration(unittest.TestCase):
         self.assertIn("volatility_regime", data)
 
     def test_http_get_indicators_endpoint(self):
-        response = self.client.get("/api/v1/analytics/indicators/AAPL?lookback_days=30")
+        response = self.client.get("/api/v1/analytics/indicators/AAPL?lookback_days=30&include_atr=true")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         data = payload["data"]
@@ -126,6 +129,8 @@ class TestAnalyticsHttpIntegration(unittest.TestCase):
         self.assertIn("smas", data)
         self.assertIn("macd", data)
         self.assertIn("bollinger", data)
+        self.assertIn("atr", data)
+        self.assertIsNotNone(data["atr"])
 
     def test_http_get_returns_endpoint(self):
         response = self.client.get("/api/v1/analytics/returns/AAPL?lookback_days=30")

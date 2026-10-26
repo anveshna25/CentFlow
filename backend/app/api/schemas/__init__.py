@@ -1,4 +1,5 @@
 from app.api.schemas.analytics import (
+    ATRComponentSchema,
     BollingerBandsComponentSchema,
     DrawdownMetricSchema,
     IndicatorSeriesResponseSchema,
@@ -70,6 +71,7 @@ __all__ = [
     "ReturnsAnalysisResponseSchema",
     "MACDComponentSchema",
     "BollingerBandsComponentSchema",
+    "ATRComponentSchema",
     "IndicatorSeriesResponseSchema",
     "MarketIntelligenceResponseSchema",
     "PortfolioCreateRequest",
