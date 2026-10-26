@@ -10,6 +10,10 @@ from app.api.schemas.market_data import (
     BackfillRequestSchema,
     BackfillResponseSchema,
     BarResponseSchema,
+    CacheClearResponseSchema,
+    CachePurgeResponseSchema,
+    CacheStatsSchema,
+    CacheTTLConfigSchema,
     InstrumentResponseSchema,
     PersistedPriceSchema,
     ProviderStatusSchema,
@@ -17,6 +21,8 @@ from app.api.schemas.market_data import (
     SyncCatalogRequestSchema,
     SyncCatalogResponseSchema,
 )
+from app.core.cache import AsyncMemoryCache
+from app.core.config import get_settings
 from app.database.session import get_db
 from app.services.ingestion import MarketDataIngestionService
 from app.services.market_data import MarketDataService
@@ -24,15 +30,32 @@ from app.services.quote import QuoteService
 
 router = APIRouter(prefix="/market-data", tags=["market-data"])
 
+_api_cache: Optional[AsyncMemoryCache] = None
 
-def get_market_data_service() -> MarketDataService:
+
+def get_api_cache() -> AsyncMemoryCache:
+    """Retrieve application-level shared cache instance for API requests."""
+    global _api_cache
+    if _api_cache is None:
+        settings = get_settings()
+        _api_cache = AsyncMemoryCache(
+            max_capacity=settings.cache_max_capacity,
+            eviction_policy=settings.cache_eviction_policy,
+        )
+    return _api_cache
+
+
+def get_market_data_service(
+    db: Session = Depends(get_db),
+    cache: AsyncMemoryCache = Depends(get_api_cache),
+) -> MarketDataService:
     """Dependency injector for MarketDataService."""
-    return MarketDataService()
+    return MarketDataService(db=db, cache=cache)
 
 
-def get_quote_service() -> QuoteService:
-    """Dependency injector for QuoteService."""
-    return QuoteService()
+def get_quote_service(service: MarketDataService = Depends(get_market_data_service)) -> QuoteService:
+    """Dependency injector for QuoteService reusing MarketDataService's cached provider."""
+    return service.quote_service
 
 
 def get_ingestion_service(
@@ -41,6 +64,73 @@ def get_ingestion_service(
 ) -> MarketDataIngestionService:
     """Dependency injector for MarketDataIngestionService."""
     return MarketDataIngestionService(db=db, market_data_service=market_data_service)
+
+
+@router.get("/cache/stats", response_model=ResponseEnvelope[CacheStatsSchema])
+async def get_cache_stats(
+    service: MarketDataService = Depends(get_market_data_service),
+) -> ResponseEnvelope[CacheStatsSchema]:
+    """Retrieve operational metrics, hit ratios, and telemetry for the market data caching layer."""
+    stats = service.get_cache_stats()
+    if stats is None:
+        data = CacheStatsSchema(
+            enabled=False,
+            size=0,
+            max_capacity=0,
+            eviction_policy="none",
+            hits=0,
+            misses=0,
+            stale_hits=0,
+            evictions=0,
+            coalesced=0,
+            hit_ratio=0.0,
+            ttl_config=None,
+        )
+    else:
+        ttl_cfg = stats.get("ttl_config")
+        ttl_schema = CacheTTLConfigSchema(**ttl_cfg) if ttl_cfg else None
+        data = CacheStatsSchema(
+            enabled=stats["enabled"],
+            size=stats["size"],
+            max_capacity=stats["max_capacity"],
+            eviction_policy=stats["eviction_policy"],
+            hits=stats["hits"],
+            misses=stats["misses"],
+            stale_hits=stats.get("stale_hits", 0),
+            evictions=stats["evictions"],
+            coalesced=stats["coalesced"],
+            hit_ratio=stats["hit_ratio"],
+            ttl_config=ttl_schema,
+        )
+    return ResponseEnvelope(data=data)
+
+
+@router.post("/cache/clear", response_model=ResponseEnvelope[CacheClearResponseSchema])
+async def clear_cache(
+    prefix: Optional[str] = Query(
+        default=None,
+        description="Optional cache key prefix to invalidate (e.g. 'quote:', 'history:', 'search:')",
+    ),
+    service: MarketDataService = Depends(get_market_data_service),
+) -> ResponseEnvelope[CacheClearResponseSchema]:
+    """Flush cached market data entries by prefix or clear the entire cache store."""
+    removed = await service.clear_cache(prefix=prefix)
+    data = CacheClearResponseSchema(
+        cleared=True,
+        prefix=prefix,
+        entries_removed=removed,
+    )
+    return ResponseEnvelope(data=data)
+
+
+@router.post("/cache/purge", response_model=ResponseEnvelope[CachePurgeResponseSchema])
+async def purge_expired_cache(
+    service: MarketDataService = Depends(get_market_data_service),
+) -> ResponseEnvelope[CachePurgeResponseSchema]:
+    """Manually sweep and purge expired entries from the market data cache store."""
+    purged = await service.purge_expired_cache()
+    data = CachePurgeResponseSchema(purged_count=purged)
+    return ResponseEnvelope(data=data)
 
 
 @router.get("/status", response_model=ResponseEnvelope[ProviderStatusSchema])

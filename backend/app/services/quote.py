@@ -210,7 +210,7 @@ def validate_and_normalize_quote(
         change=change,
         change_percent=change_pct,
         market_status=market_status,
-        is_stale=is_stale,
+        is_stale=raw_quote.is_stale or is_stale,
         delay_minutes=provider.capabilities.delay_minutes,
         data_source=provider.name,
         staleness_seconds=staleness_seconds,
