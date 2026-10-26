@@ -16,3 +16,15 @@ class MarketModel(Base, TimestampMixin):
     is_active = Column(Boolean, nullable=False, default=True)
 
     instruments = relationship("InstrumentModel", back_populates="market")
+
+    def to_domain(self):
+        from app.domain.models import Market
+
+        return Market(
+            id=self.id,
+            name=self.name,
+            code=self.code,
+            region=self.region,
+            description=self.description,
+            is_active=self.is_active,
+        )

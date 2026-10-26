@@ -36,6 +36,15 @@ from app.api.schemas.portfolio import (
     PositionCreateRequest,
     PositionResponse,
 )
+from app.api.schemas.asset import (
+    AssetDetailResponseSchema,
+    AssetEnrichRequestSchema,
+    AssetMasterSummarySchema,
+    AssetSchema,
+    ExchangeSchema,
+    InstrumentDetailSchema,
+    MarketSchema,
+)
 
 __all__ = [
     "BaseSchema",
@@ -67,4 +76,11 @@ __all__ = [
     "PortfolioResponse",
     "PositionCreateRequest",
     "PositionResponse",
+    "AssetSchema",
+    "ExchangeSchema",
+    "MarketSchema",
+    "InstrumentDetailSchema",
+    "AssetDetailResponseSchema",
+    "AssetEnrichRequestSchema",
+    "AssetMasterSummarySchema",
 ]

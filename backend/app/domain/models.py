@@ -6,11 +6,16 @@ from typing import Optional
 
 @dataclass
 class Asset:
-    """A tradable or trackable financial asset."""
+    """Canonical tradable or trackable financial asset entity."""
 
     id: str
     name: str
     asset_type: str
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    country: Optional[str] = None
+    description: Optional[str] = None
+    is_active: bool = True
 
 
 @dataclass
@@ -19,7 +24,12 @@ class Exchange:
 
     id: str
     name: str
+    code: Optional[str] = None
     country: Optional[str] = None
+    country_code: Optional[str] = None
+    timezone: Optional[str] = None
+    currency: Optional[str] = None
+    is_active: bool = True
 
 
 @dataclass
@@ -28,12 +38,15 @@ class Market:
 
     id: str
     name: str
+    code: Optional[str] = None
     region: Optional[str] = None
+    description: Optional[str] = None
+    is_active: bool = True
 
 
 @dataclass
 class Instrument:
-    """A specific financial instrument that can be priced or traded."""
+    """Canonical financial instrument that can be priced, traded, or tracked."""
 
     id: str
     symbol: str
@@ -41,6 +54,10 @@ class Instrument:
     asset: Asset
     exchange: Optional[Exchange] = None
     market: Optional[Market] = None
+    currency: str = "USD"
+    provider_symbol: Optional[str] = None
+    lot_size: Decimal = Decimal("1.0")
+    is_active: bool = True
 
 
 @dataclass
