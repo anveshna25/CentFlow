@@ -142,6 +142,78 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(after_delete.positions_count, 0)
         self.assertEqual(after_delete.total_valuation, Decimal("0.00"))
 
+    async def test_position_live_market_data_valuations_and_daily_pnl(self):
+        """Validates that live quotes properly update market_value, daily_pnl, and daily_pnl_percent."""
+        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Alpha Fund"))
+        pos_req = PositionCreateRequest(
+            symbol="AAPL",
+            quantity=Decimal("10"),
+            average_price=Decimal("150.00"),
+            currency="USD",
+        )
+        updated = await self.portfolio_service.add_position(pf.id, pos_req)
+        self.assertEqual(updated.positions_count, 1)
+
+        holding = updated.positions[0]
+        # In mock provider: AAPL price = 185.50, previous_close = 183.90, change = +1.60 (+0.87%)
+        self.assertEqual(holding.current_price, Decimal("185.500000"))
+        self.assertEqual(holding.market_value, Decimal("1855.00"))
+        self.assertEqual(holding.cost_basis, Decimal("1500.00"))
+        self.assertEqual(holding.unrealized_pnl, Decimal("355.00"))
+        self.assertEqual(holding.unrealized_pnl_percent, Decimal("23.67"))
+        self.assertEqual(holding.daily_pnl, Decimal("16.00"))
+        self.assertEqual(holding.daily_pnl_percent, Decimal("0.87"))
+        self.assertFalse(holding.is_stale)
+
+        # Portfolio aggregate daily metrics
+        self.assertEqual(updated.total_valuation, Decimal("1855.00"))
+        self.assertEqual(updated.total_daily_pnl, Decimal("16.00"))
+        self.assertEqual(updated.total_daily_pnl_percent, Decimal("0.87"))
+        self.assertFalse(updated.is_stale)
+
+    async def test_fallback_to_entry_price_when_symbol_unquoted(self):
+        """Positions with unquoted or offline symbols fall back to entry price with is_stale=True."""
+        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Custom Assets"))
+        pos_req = PositionCreateRequest(
+            symbol="CUSTOM_ASSET_XYZ",
+            quantity=Decimal("5"),
+            average_price=Decimal("100.00"),
+            currency="USD",
+        )
+        updated = await self.portfolio_service.add_position(pf.id, pos_req)
+        holding = updated.positions[0]
+        self.assertEqual(holding.current_price, Decimal("100.000000"))
+        self.assertEqual(holding.market_value, Decimal("500.00"))
+        self.assertEqual(holding.cost_basis, Decimal("500.00"))
+        self.assertEqual(holding.unrealized_pnl, Decimal("0.00"))
+        self.assertEqual(holding.daily_pnl, Decimal("0.00"))
+        self.assertEqual(holding.daily_pnl_percent, Decimal("0.00"))
+        self.assertTrue(holding.is_stale)
+        self.assertTrue(updated.is_stale)
+
+    async def test_multi_asset_portfolio_batch_valuation_consistency(self):
+        """Batch quote aggregation ensures numerical consistency across diverse asset holdings."""
+        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Balanced Multi-Asset"))
+        await self.portfolio_service.add_position(
+            pf.id,
+            PositionCreateRequest(symbol="AAPL", quantity=Decimal("10"), average_price=Decimal("150.00")),
+        )
+        await self.portfolio_service.add_position(
+            pf.id,
+            PositionCreateRequest(symbol="MSFT", quantity=Decimal("5"), average_price=Decimal("400.00")),
+        )
+        refreshed = await self.portfolio_service.get_portfolio(pf.id)
+        self.assertEqual(refreshed.positions_count, 2)
+
+        expected_valuation = sum(p.market_value for p in refreshed.positions)
+        expected_cost = sum(p.cost_basis for p in refreshed.positions)
+        expected_daily_pnl = sum(p.daily_pnl for p in refreshed.positions)
+
+        self.assertEqual(refreshed.total_valuation, expected_valuation)
+        self.assertEqual(refreshed.total_cost_basis, expected_cost)
+        self.assertEqual(refreshed.total_daily_pnl, expected_daily_pnl)
+        self.assertEqual(refreshed.total_unrealized_pnl, expected_valuation - expected_cost)
+
     def test_api_portfolios_endpoints_e2e(self):
         """End-to-end HTTP integration test for portfolios and position endpoints via TestClient."""
         # 1. List portfolios (default created)
@@ -170,6 +242,11 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
         # Mock price is 65,400.00 -> market value = 32,700.00
         self.assertEqual(float(position["market_value"]), 32700.00)
         self.assertEqual(float(position["unrealized_pnl"]), 2700.00)
+        self.assertIn("daily_pnl", position)
+        self.assertIn("daily_pnl_percent", position)
+        self.assertIn("is_stale", position)
+        self.assertIn("total_daily_pnl", pf_data)
+        self.assertIn("total_daily_pnl_percent", pf_data)
         pos_id = position["id"]
 
         # 3. Retrieve portfolio detail
@@ -185,3 +262,4 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
