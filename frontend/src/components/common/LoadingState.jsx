@@ -100,9 +100,9 @@ export function LoadingState({
           style={{
             width: diameter,
             height: diameter,
-            border: `${borderWidth} solid rgba(59, 130, 246, 0.18)`,
+            border: `${borderWidth} solid rgba(16, 185, 129, 0.2)`,
             borderTop: `${borderWidth} solid var(--cf-brand-primary)`,
-            borderRight: `${borderWidth} solid var(--cf-brand-cyan)`,
+            borderRight: `${borderWidth} solid var(--cf-brand-primary)`,
             borderRadius: '50%',
             animation: 'cf-spin 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite',
             position: 'relative',
