@@ -155,6 +155,98 @@ class TestAsyncMemoryCache(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call_count, 1)
         self.assertEqual(cache.coalesced, 9)
 
+    async def test_lru_eviction(self) -> None:
+        cache = AsyncMemoryCache(max_capacity=2, eviction_policy="lru")
+        await cache.set("k1", "v1", ttl_seconds=60.0)
+        await cache.set("k2", "v2", ttl_seconds=60.0)
+        # Access k1 to make k2 least recently used
+        await cache.get("k1")
+        # Inserting k3 should evict k2
+        await cache.set("k3", "v3", ttl_seconds=60.0)
+        self.assertEqual(await cache.get("k1"), "v1")
+        self.assertIsNone(await cache.get("k2"))
+        self.assertEqual(await cache.get("k3"), "v3")
+        self.assertEqual(cache.evictions, 1)
+
+    async def test_lfu_eviction(self) -> None:
+        cache = AsyncMemoryCache(max_capacity=2, eviction_policy="lfu")
+        await cache.set("k1", "v1", ttl_seconds=60.0)
+        await cache.set("k2", "v2", ttl_seconds=60.0)
+        # Access k1 multiple times
+        for _ in range(4):
+            await cache.get("k1")
+        # Inserting k3 should evict k2 (lower frequency)
+        await cache.set("k3", "v3", ttl_seconds=60.0)
+        self.assertEqual(await cache.get("k1"), "v1")
+        self.assertIsNone(await cache.get("k2"))
+        self.assertEqual(await cache.get("k3"), "v3")
+
+    async def test_fifo_eviction(self) -> None:
+        cache = AsyncMemoryCache(max_capacity=2, eviction_policy="fifo")
+        await cache.set("k1", "v1", ttl_seconds=60.0)
+        await cache.set("k2", "v2", ttl_seconds=60.0)
+        # Access k1 heavily
+        for _ in range(5):
+            await cache.get("k1")
+        # In FIFO, k1 was inserted first, so k1 is evicted!
+        await cache.set("k3", "v3", ttl_seconds=60.0)
+        self.assertIsNone(await cache.get("k1"))
+        self.assertEqual(await cache.get("k2"), "v2")
+        self.assertEqual(await cache.get("k3"), "v3")
+
+    def test_invalid_eviction_policy(self) -> None:
+        with self.assertRaises(ValueError):
+            AsyncMemoryCache(eviction_policy="invalid_policy")
+
+    async def test_stale_while_revalidate(self) -> None:
+        cache = AsyncMemoryCache()
+        await cache.set("temp", "live_data", ttl_seconds=0.05, stale_ttl_seconds=0.5)
+        val, is_stale = await cache.get_with_staleness("temp")
+        self.assertEqual(val, "live_data")
+        self.assertFalse(is_stale)
+
+        # Wait past normal TTL but within stale grace window
+        await asyncio.sleep(0.07)
+        val, is_stale = await cache.get_with_staleness("temp")
+        self.assertEqual(val, "live_data")
+        self.assertTrue(is_stale)
+        self.assertEqual(cache.stale_hits, 1)
+
+    async def test_clear_by_prefix(self) -> None:
+        cache = AsyncMemoryCache()
+        await cache.set("quote:AAPL", "q1", 60.0)
+        await cache.set("quote:MSFT", "q2", 60.0)
+        await cache.set("history:AAPL:1:2:1d", "h1", 60.0)
+        self.assertEqual(cache.size(), 3)
+
+        removed = await cache.clear(prefix="quote:")
+        self.assertEqual(removed, 2)
+        self.assertEqual(cache.size(), 1)
+        self.assertIsNone(await cache.get("quote:AAPL"))
+        self.assertEqual(await cache.get("history:AAPL:1:2:1d"), "h1")
+
+    async def test_purge_expired(self) -> None:
+        cache = AsyncMemoryCache()
+        await cache.set("expired_key", "val", ttl_seconds=0.04)
+        await cache.set("alive_key", "val", ttl_seconds=60.0)
+        await asyncio.sleep(0.06)
+
+        purged = await cache.purge_expired()
+        self.assertEqual(purged, 1)
+        self.assertEqual(cache.size(), 1)
+        self.assertIsNone(await cache.get("expired_key"))
+        self.assertEqual(await cache.get("alive_key"), "val")
+
+    async def test_telemetry_and_hit_ratio(self) -> None:
+        cache = AsyncMemoryCache()
+        await cache.set("k1", "v1", 60.0)
+        await cache.get("k1")  # hit
+        await cache.get("missing")  # miss
+        stats = cache.get_stats()
+        self.assertEqual(stats["hits"], 1)
+        self.assertEqual(stats["misses"], 1)
+        self.assertEqual(stats["hit_ratio"], 0.5)
+
 
 class TestCachedMarketDataProvider(unittest.IsolatedAsyncioTestCase):
     """Unit tests for CachedMarketDataProvider proxy decorator."""
@@ -243,6 +335,95 @@ class TestCachedMarketDataProvider(unittest.IsolatedAsyncioTestCase):
         await cached.clear_cache()
         self.assertEqual(cached.get_stats()["size"], 0)
 
+    async def test_graceful_degradation_on_provider_error(self) -> None:
+        from app.core.errors import ProviderUnavailableError
+
+        class FailingProvider(DummyProvider):
+            def __init__(self) -> None:
+                super().__init__()
+                self.should_fail = False
+
+            async def get_quote(self, symbol: str) -> ProviderQuote:
+                if self.should_fail:
+                    raise ProviderUnavailableError("Simulated upstream provider outage")
+                return await super().get_quote(symbol)
+
+        failing = FailingProvider()
+        cached = CachedMarketDataProvider(failing, quote_ttl=0.05, stale_grace_ttl=5.0)
+
+        # 1. First fetch primes the cache
+        q1 = await cached.get_quote("AAPL")
+        self.assertEqual(q1.price, Decimal("150.00"))
+        self.assertFalse(q1.is_stale)
+
+        # 2. Wait for quote_ttl to expire, then trigger provider failure
+        await asyncio.sleep(0.07)
+        failing.should_fail = True
+
+        # 3. Should not crash! Should gracefully return stale quote
+        q2 = await cached.get_quote("AAPL")
+        self.assertEqual(q2.price, Decimal("150.00"))
+        self.assertTrue(q2.is_stale)
+        self.assertEqual(cached.cache.stale_hits, 1)
+
+    async def test_tier2_persistence_fallback(self) -> None:
+        from app.core.errors import ProviderUnavailableError
+
+        class BrokenProvider(DummyProvider):
+            async def get_quote(self, symbol: str) -> ProviderQuote:
+                raise ProviderUnavailableError("Total provider downtime")
+
+        persisted_quote = ProviderQuote(
+            symbol="AAPL",
+            price=Decimal("182.25"),
+            currency="USD",
+            timestamp=datetime(2026, 4, 25, 12, 0, 0, tzinfo=timezone.utc),
+        )
+
+        def db_fallback(symbol: str) -> Optional[ProviderQuote]:
+            if symbol == "AAPL":
+                return persisted_quote
+            return None
+
+        cached = CachedMarketDataProvider(BrokenProvider(), db_fallback_fn=db_fallback)
+
+        # In-memory has no prior entry, provider fails, Tier-2 persistence fallback is returned!
+        q = await cached.get_quote("AAPL")
+        self.assertEqual(q.symbol, "AAPL")
+        self.assertEqual(q.price, Decimal("182.25"))
+        self.assertTrue(q.is_stale)
+
+    async def test_differentiated_ttls_and_telemetry(self) -> None:
+        dummy = DummyProvider()
+        cached = CachedMarketDataProvider(
+            dummy,
+            quote_ttl=12.0,
+            history_ttl=240.0,
+            search_ttl=480.0,
+            asset_ttl=1200.0,
+            stale_grace_ttl=3600.0,
+        )
+        stats = cached.get_stats()
+        self.assertTrue(stats["enabled"])
+        self.assertEqual(stats["ttl_config"]["quote_ttl"], 12.0)
+        self.assertEqual(stats["ttl_config"]["history_ttl"], 240.0)
+        self.assertEqual(stats["ttl_config"]["search_ttl"], 480.0)
+        self.assertEqual(stats["ttl_config"]["asset_ttl"], 1200.0)
+        self.assertEqual(stats["ttl_config"]["stale_grace_ttl"], 3600.0)
+
+    async def test_clear_cache_prefix(self) -> None:
+        dummy = DummyProvider()
+        cached = CachedMarketDataProvider(dummy, quote_ttl=60.0, search_ttl=60.0)
+
+        await cached.get_quote("AAPL")
+        await cached.search_instruments("apple")
+        self.assertEqual(cached.cache.size(), 2)
+
+        # Clear only quotes
+        removed = await cached.clear_cache(prefix="quote:")
+        self.assertEqual(removed, 1)
+        self.assertEqual(cached.cache.size(), 1)
+
 
 class TestMarketDataServiceWithCache(unittest.IsolatedAsyncioTestCase):
     """Unit tests verifying MarketDataService integration with caching layer."""
@@ -273,3 +454,19 @@ class TestMarketDataServiceWithCache(unittest.IsolatedAsyncioTestCase):
         await service.get_quote("AAPL")
         await service.get_quote("AAPL")
         self.assertEqual(dummy.quote_calls, 2)
+
+    async def test_service_clear_cache_prefix_and_purge(self) -> None:
+        dummy = DummyProvider()
+        service = MarketDataService(provider=dummy, enable_cache=True)
+
+        await service.get_quote("AAPL")
+        self.assertEqual(service.get_cache_stats()["size"], 1)
+
+        # Purge when unexpired returns 0
+        purged = await service.purge_expired_cache()
+        self.assertEqual(purged, 0)
+
+        # Clear prefix
+        removed = await service.clear_cache(prefix="quote:")
+        self.assertEqual(removed, 1)
+        self.assertEqual(service.get_cache_stats()["size"], 0)

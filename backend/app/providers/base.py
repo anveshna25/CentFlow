@@ -33,6 +33,7 @@ class ProviderQuote:
     previous_close: Optional[Decimal] = None
     change: Optional[Decimal] = None
     change_percent: Optional[Decimal] = None
+    is_stale: bool = False
 
 
 @dataclass(frozen=True)
