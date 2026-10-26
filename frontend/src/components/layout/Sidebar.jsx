@@ -36,7 +36,7 @@ export function Sidebar() {
       id="cf-sidebar"
       style={{
         width: '240px',
-        background: 'var(--cf-bg-surface)',
+        background: 'var(--cf-bg-sidebar)',
         borderRight: '1px solid var(--cf-border)',
         display: 'flex',
         flexDirection: 'column',
@@ -83,9 +83,7 @@ export function Sidebar() {
                 fontWeight: 700,
                 margin: 0,
                 letterSpacing: '-0.02em',
-                background: 'linear-gradient(to right, #ffffff, #94a3b8)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                color: 'var(--cf-text-primary)',
               }}
             >
               CentFlow
@@ -118,9 +116,9 @@ export function Sidebar() {
                   justifyContent: 'space-between',
                   padding: '10px 14px',
                   borderRadius: 'var(--cf-radius-md)',
-                  background: isActive ? 'rgba(59, 130, 246, 0.12)' : 'transparent',
+                  background: isActive ? 'var(--cf-brand-subtle)' : 'transparent',
                   color: isActive ? 'var(--cf-text-primary)' : 'var(--cf-text-secondary)',
-                  border: isActive ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid transparent',
+                  border: isActive ? '1px solid var(--cf-brand-border)' : '1px solid transparent',
                   cursor: 'pointer',
                   fontSize: '13px',
                   fontWeight: isActive ? 600 : 500,
@@ -139,8 +137,9 @@ export function Sidebar() {
                       fontSize: '10px',
                       padding: '2px 6px',
                       borderRadius: 'var(--cf-radius-full)',
-                      background: 'rgba(59, 130, 246, 0.2)',
+                      background: 'var(--cf-brand-subtle)',
                       color: 'var(--cf-brand-primary)',
+                      border: '1px solid var(--cf-brand-border)',
                       fontWeight: 700,
                     }}
                   >
@@ -182,7 +181,7 @@ export function Sidebar() {
             display: 'block',
           }}
         >
-          Phase 2: Core Foundation
+          Phase 7: Intelligence
         </span>
       </div>
     </aside>

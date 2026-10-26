@@ -4,6 +4,7 @@ import { searchInstruments } from '../../api/marketData'
 import { highlightMatch } from '../../utils/highlight'
 import { useNavigation } from '../../state/NavigationContext'
 import { PAGES } from '../../state/pages'
+import { useTheme } from '../../state/ThemeContext'
 
 // Fallback catalog in case backend search is offline or loading
 const FALLBACK_CATALOG = [
@@ -19,6 +20,7 @@ const FALLBACK_CATALOG = [
 
 export function Header({ onSearch, searchValue = '', onSelectAsset }) {
   const { navigate } = useNavigation()
+  const { isDark, toggleTheme } = useTheme()
   const [query, setQuery] = useState(searchValue)
   const [prevSearchValue, setPrevSearchValue] = useState(searchValue)
   const [results, setResults] = useState([])
@@ -184,7 +186,7 @@ export function Header({ onSearch, searchValue = '', onSelectAsset }) {
       style={{
         height: '64px',
         borderBottom: '1px solid var(--cf-border)',
-        background: 'rgba(10, 14, 23, 0.85)',
+        background: 'var(--cf-bg-header)',
         backdropFilter: 'blur(16px)',
         display: 'flex',
         alignItems: 'center',
@@ -532,6 +534,37 @@ export function Header({ onSearch, searchValue = '', onSelectAsset }) {
         <Badge variant="brand" size="sm">
           Core Engine v0.1.0
         </Badge>
+
+        <button
+          id="cf-theme-toggle"
+          onClick={toggleTheme}
+          title={`Switch to ${isDark ? 'Light' : 'Dark'} mode`}
+          aria-label={`Switch to ${isDark ? 'Light' : 'Dark'} mode`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '32px',
+            height: '32px',
+            borderRadius: 'var(--cf-radius-md)',
+            background: 'var(--cf-bg-surface-elevated)',
+            border: '1px solid var(--cf-border)',
+            color: 'var(--cf-text-secondary)',
+            cursor: 'pointer',
+            fontSize: '14px',
+            transition: 'all var(--cf-transition-fast)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--cf-border-hover)'
+            e.currentTarget.style.color = 'var(--cf-text-primary)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'var(--cf-border)'
+            e.currentTarget.style.color = 'var(--cf-text-secondary)'
+          }}
+        >
+          {isDark ? '☀️' : '🌙'}
+        </button>
       </div>
     </header>
   )
