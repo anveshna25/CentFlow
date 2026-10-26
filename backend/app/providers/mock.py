@@ -210,7 +210,19 @@ class MockMarketDataProvider(BaseMarketDataProvider):
         current = start.replace(hour=0, minute=0, second=0, microsecond=0)
         end_date = end.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        step = timedelta(days=1)
+        if interval in ("1wk", "1w", "1WK", "1W"):
+            step = timedelta(weeks=1)
+        elif interval in ("1mo", "1m", "1MO", "1M"):
+            step = timedelta(days=30)
+        elif interval in ("1h", "1H"):
+            step = timedelta(hours=1)
+        elif interval in ("15m", "15M"):
+            step = timedelta(minutes=15)
+        elif interval in ("5m", "5M"):
+            step = timedelta(minutes=5)
+        else:
+            step = timedelta(days=1)
+
         day_index = 0
 
         while current <= end_date:

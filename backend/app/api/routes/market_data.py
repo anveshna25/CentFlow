@@ -98,19 +98,39 @@ async def get_quote(
 @router.get("/history/{symbol}", response_model=ResponseEnvelope[list[BarResponseSchema]])
 async def get_historical_bars(
     symbol: str,
-    days: int = Query(default=30, ge=1, le=365, description="Number of past days of history to fetch"),
-    interval: str = Query(default="1d", description="Bar aggregation interval (e.g. 1d)"),
+    days: Optional[int] = Query(default=None, ge=1, le=2000, description="Number of past days of history to fetch"),
+    range: Optional[str] = Query(default=None, description="Timeframe range code: 1D, 1W, 1M, 3M, 6M, 1Y, 5Y, ALL"),
+    interval: Optional[str] = Query(default=None, description="Bar aggregation interval (e.g. 1d, 1wk, 1mo)"),
+    start: Optional[datetime] = Query(default=None, description="Explicit start datetime in ISO-8601 format"),
+    end: Optional[datetime] = Query(default=None, description="Explicit end datetime in ISO-8601 format"),
     service: MarketDataService = Depends(get_market_data_service),
 ) -> ResponseEnvelope[list[BarResponseSchema]]:
-    """Retrieve historical OHLCV bars for an instrument symbol."""
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=days)
-    bars = await service.get_historical_bars(symbol=symbol, start=start, end=end, interval=interval)
-    data = [BarResponseSchema(**asdict(bar)) for bar in bars]
-    return ResponseEnvelope(
-        data=data,
-        meta={"source": service.provider.name, "count": len(data), "interval": interval},
+    """Retrieve standardized and validated historical OHLCV bars for an instrument symbol."""
+    series = await service.get_historical_series(
+        symbol=symbol,
+        range_str=range,
+        days=days,
+        start=start,
+        end=end,
+        interval=interval,
     )
+    data = [BarResponseSchema(**asdict(bar)) for bar in series.bars]
+    meta = {
+        "symbol": series.symbol,
+        "count": series.count,
+        "interval": series.interval,
+        "range": series.range,
+        "start": series.start.isoformat(),
+        "end": series.end.isoformat(),
+        "source": series.data_source,
+        "min_price": series.min_price,
+        "max_price": series.max_price,
+        "first_close": series.first_close,
+        "last_close": series.last_close,
+        "period_change": series.period_change,
+        "period_change_percent": series.period_change_percent,
+    }
+    return ResponseEnvelope(data=data, meta=meta)
 
 
 @router.get("/instruments", response_model=ResponseEnvelope[list[InstrumentResponseSchema]])

@@ -15,6 +15,7 @@ from app.providers.cache import CachedMarketDataProvider
 from app.providers.registry import get_provider
 
 
+from app.services.history import HistoricalSeries, HistoryService
 from app.services.quote import MarketQuote, QuoteService
 
 
@@ -47,6 +48,7 @@ class MarketDataService:
             self._provider = raw_provider
 
         self._quote_service = QuoteService(provider=self._provider, enable_cache=False)
+        self._history_service = HistoryService(provider=self._provider)
 
     @property
     def provider(self) -> BaseMarketDataProvider:
@@ -57,6 +59,11 @@ class MarketDataService:
     def quote_service(self) -> QuoteService:
         """The dedicated QuoteService instance."""
         return self._quote_service
+
+    @property
+    def history_service(self) -> HistoryService:
+        """The dedicated HistoryService instance."""
+        return self._history_service
 
     @property
     def capabilities(self):
@@ -93,14 +100,37 @@ class MarketDataService:
     async def get_historical_bars(
         self,
         symbol: str,
-        start: datetime,
-        end: datetime,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
         interval: str = "1d",
+        range: Optional[str] = None,
+        days: Optional[int] = None,
     ) -> Sequence[ProviderBar]:
         """Fetch historical price bars for an instrument symbol."""
-        clean_symbol = symbol.strip().upper()
-        return await self._provider.get_historical_bars(
-            symbol=clean_symbol,
+        series = await self._history_service.get_historical_series(
+            symbol=symbol,
+            range_str=range,
+            days=days,
+            start=start,
+            end=end,
+            interval=interval,
+        )
+        return series.bars
+
+    async def get_historical_series(
+        self,
+        symbol: str,
+        range_str: Optional[str] = None,
+        days: Optional[int] = None,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+        interval: Optional[str] = None,
+    ) -> HistoricalSeries:
+        """Fetch full historical series with validation and summary metrics."""
+        return await self._history_service.get_historical_series(
+            symbol=symbol,
+            range_str=range_str,
+            days=days,
             start=start,
             end=end,
             interval=interval,

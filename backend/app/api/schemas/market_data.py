@@ -38,6 +38,24 @@ class BarResponseSchema(BaseSchema):
     volume: Decimal = Field(..., description="Volume traded.")
 
 
+class HistoricalSeriesMetaSchema(BaseSchema):
+    """Metadata schema accompanying historical OHLCV queries."""
+
+    symbol: str = Field(..., description="Ticker symbol.")
+    count: int = Field(..., description="Total number of returned bars.")
+    interval: str = Field(..., description="Candle aggregation interval.")
+    range: Optional[str] = Field(default=None, description="Timeframe range code (e.g. 1D, 1W, 1M, 1Y).")
+    start: datetime = Field(..., description="Earliest boundary timestamp.")
+    end: datetime = Field(..., description="Latest boundary timestamp.")
+    source: str = Field(..., description="Originating provider data source.")
+    min_price: Optional[Decimal] = Field(default=None, description="Lowest price observed across window.")
+    max_price: Optional[Decimal] = Field(default=None, description="Highest price observed across window.")
+    first_close: Optional[Decimal] = Field(default=None, description="Closing price of first bar in window.")
+    last_close: Optional[Decimal] = Field(default=None, description="Closing price of last bar in window.")
+    period_change: Optional[Decimal] = Field(default=None, description="Absolute price change over period.")
+    period_change_percent: Optional[Decimal] = Field(default=None, description="Percentage change over period.")
+
+
 class InstrumentResponseSchema(BaseSchema):
     """Instrument metadata schema for search API responses."""
 
