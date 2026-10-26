@@ -104,6 +104,19 @@ class TestAnalyticsServiceAndIntelligence(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(perf["period_return"])
         self.assertIsNotNone(perf["volatility"])
         self.assertIsNotNone(perf["drawdown"])
+        self.assertIsNotNone(perf["risk_metrics"])
+        self.assertGreater(perf["risk_metrics"].win_rate, Decimal("0"))
+
+        perf_bench = await self.analytics_service.get_performance_metrics(
+            "AAPL",
+            lookback_days=30,
+            benchmark_symbol="SPY",
+            risk_free_rate=0.04,
+        )
+        self.assertIsNotNone(perf_bench["benchmark"])
+        self.assertEqual(perf_bench["benchmark"].benchmark_symbol, "SPY")
+        self.assertIsNotNone(perf_bench["benchmark"].beta)
+        self.assertIsNotNone(perf_bench["benchmark"].tracking_error)
 
         indicators = await self.analytics_service.get_technical_indicators(
             "AAPL",

@@ -50,6 +50,40 @@ class DrawdownMetricSchema(BaseSchema):
     is_recovered: bool = Field(..., description="Whether terminal price has recovered to peak.")
 
 
+class RiskAdjustedMetricsSchema(BaseSchema):
+    """Risk-adjusted return and distribution ratios."""
+
+    annualized_return: Decimal = Field(..., description="Annualized percentage return.")
+    cagr: Decimal = Field(..., description="Compound annual growth rate (%).")
+    sharpe_ratio: Optional[Decimal] = Field(default=None, description="Annualized Sharpe ratio.")
+    sortino_ratio: Optional[Decimal] = Field(default=None, description="Sortino downside risk ratio.")
+    calmar_ratio: Optional[Decimal] = Field(default=None, description="Calmar drawdown recovery ratio.")
+    downside_deviation: Decimal = Field(..., description="Annualized downside volatility deviation.")
+    win_rate: Decimal = Field(..., description="Percentage of positive return periods.")
+    best_return: Decimal = Field(..., description="Maximum single-period percentage return.")
+    worst_return: Decimal = Field(..., description="Minimum single-period percentage return.")
+    positive_periods: int = Field(..., description="Count of positive return periods.")
+    negative_periods: int = Field(..., description="Count of negative return periods.")
+    total_periods: int = Field(..., description="Total return periods evaluated.")
+
+
+class BenchmarkMetricsSchema(BaseSchema):
+    """Comparative benchmark metrics relative to a market index (e.g. SPY)."""
+
+    benchmark_symbol: str = Field(..., description="Benchmark ticker symbol.")
+    benchmark_return: Decimal = Field(..., description="Benchmark period percentage return.")
+    excess_return: Decimal = Field(..., description="Asset return minus benchmark return (%).")
+    beta: Optional[Decimal] = Field(default=None, description="Systematic market risk sensitivity (beta).")
+    alpha: Optional[Decimal] = Field(default=None, description="Annualized Jensen's alpha (%).")
+    correlation: Optional[Decimal] = Field(default=None, description="Pearson correlation coefficient.")
+    r_squared: Optional[Decimal] = Field(default=None, description="Coefficient of determination (R^2).")
+    tracking_error: Optional[Decimal] = Field(default=None, description="Annualized tracking error standard deviation.")
+    information_ratio: Optional[Decimal] = Field(default=None, description="Information ratio relative to benchmark.")
+    up_capture: Optional[Decimal] = Field(default=None, description="Upside capture ratio (%).")
+    down_capture: Optional[Decimal] = Field(default=None, description="Downside capture ratio (%).")
+    aligned_periods: int = Field(default=0, description="Number of timestamp-aligned trading sessions.")
+
+
 class ReturnsAnalysisResponseSchema(BaseSchema):
     """Comprehensive performance and volatility analysis report."""
 
@@ -60,6 +94,8 @@ class ReturnsAnalysisResponseSchema(BaseSchema):
     volatility: VolatilityMetricsSchema = Field(..., description="Volatility metrics.")
     drawdown: DrawdownMetricSchema = Field(..., description="Maximum drawdown metrics.")
     summary: Optional[PriceSummarySchema] = Field(default=None, description="Price distribution summary.")
+    risk_metrics: Optional[RiskAdjustedMetricsSchema] = Field(default=None, description="Risk-adjusted return ratios.")
+    benchmark: Optional[BenchmarkMetricsSchema] = Field(default=None, description="Comparative benchmark metrics.")
 
 
 class MACDComponentSchema(BaseSchema):

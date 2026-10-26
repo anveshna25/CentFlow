@@ -250,25 +250,54 @@ class MockMarketDataProvider(BaseMarketDataProvider):
 
         return bars
 
-    async def search_instruments(self, query: str) -> Sequence[ProviderInstrument]:
+    async def search_instruments(
+        self,
+        query: str = "",
+        asset_type: Optional[str] = None,
+    ) -> Sequence[ProviderInstrument]:
         if self._simulated_error is not None:
             raise self._simulated_error
 
-        q = query.strip().lower()
-        if not q:
+        q = (query or "").strip().lower()
+        clean_type = (asset_type or "").strip().lower()
+        if clean_type == "all":
+            clean_type = ""
+
+        if not q and not clean_type:
             return []
+
+        if clean_type in ("cryptocurrency", "crypto"):
+            target_types = {"crypto", "cryptocurrency"}
+        elif clean_type:
+            target_types = {clean_type}
+        else:
+            target_types = None
 
         results: list[ProviderInstrument] = []
         for sym, item in self._CATALOG.items():
-            if q in sym.lower() or q in item["name"].lower():
+            raw_type = item.get("asset_type", "equity").lower()
+            norm_type = "crypto" if raw_type in ("crypto", "cryptocurrency") else raw_type
+
+            if target_types is not None and raw_type not in target_types and norm_type not in target_types:
+                continue
+
+            if not q or (
+                q in sym.lower()
+                or q in item["name"].lower()
+                or (item.get("exchange") and q in item["exchange"].lower())
+                or (item.get("sector") and q in item["sector"].lower())
+            ):
                 results.append(
                     ProviderInstrument(
                         symbol=sym,
                         name=item["name"],
-                        asset_type=item["asset_type"],
+                        asset_type=norm_type,
                         currency=item["currency"],
                         exchange=item.get("exchange"),
                         market=item.get("market"),
+                        country="US" if item.get("exchange") in ("NASDAQ", "NYSE") else "Global",
+                        sector=item.get("sector"),
+                        industry=item.get("industry"),
                     )
                 )
         return results

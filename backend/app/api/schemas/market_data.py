@@ -65,6 +65,9 @@ class InstrumentResponseSchema(BaseSchema):
     currency: Optional[str] = Field(default=None, description="Quote currency.")
     exchange: Optional[str] = Field(default=None, description="Listing exchange venue.")
     market: Optional[str] = Field(default=None, description="Market grouping.")
+    country: Optional[str] = Field(default=None, description="Country of origin or jurisdiction.")
+    sector: Optional[str] = Field(default=None, description="Economic sector classification.")
+    industry: Optional[str] = Field(default=None, description="Industry grouping.")
 
 
 class ProviderCapabilitiesSchema(BaseSchema):

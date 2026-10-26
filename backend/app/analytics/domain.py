@@ -67,6 +67,42 @@ class PriceSeriesSummary:
 
 
 @dataclass(frozen=True)
+class RiskAdjustedMetrics:
+    """Risk-adjusted performance ratios and downside dispersion metrics."""
+
+    annualized_return: Decimal
+    cagr: Decimal
+    sharpe_ratio: Optional[Decimal]
+    sortino_ratio: Optional[Decimal]
+    calmar_ratio: Optional[Decimal]
+    downside_deviation: Decimal
+    win_rate: Decimal
+    best_return: Decimal
+    worst_return: Decimal
+    positive_periods: int
+    negative_periods: int
+    total_periods: int
+
+
+@dataclass(frozen=True)
+class BenchmarkMetrics:
+    """Comparative relative performance, sensitivity, and covariance metrics against a benchmark index."""
+
+    benchmark_symbol: str
+    benchmark_return: Decimal
+    excess_return: Decimal
+    beta: Optional[Decimal]
+    alpha: Optional[Decimal]
+    correlation: Optional[Decimal]
+    r_squared: Optional[Decimal]
+    tracking_error: Optional[Decimal]
+    information_ratio: Optional[Decimal]
+    up_capture: Optional[Decimal] = None
+    down_capture: Optional[Decimal] = None
+    aligned_periods: int = 0
+
+
+@dataclass(frozen=True)
 class IndicatorSeries:
     """Time-indexed single indicator series with warmup handling."""
 

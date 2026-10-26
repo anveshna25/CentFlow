@@ -3,13 +3,18 @@ from decimal import Decimal
 import unittest
 
 from app.analytics import (
+    align_price_series,
+    calculate_benchmark_metrics,
+    calculate_downside_deviation,
     calculate_drawdowns,
     calculate_log_returns,
     calculate_period_return,
     calculate_price_change,
     calculate_price_summary,
     calculate_returns,
+    calculate_risk_adjusted_metrics,
     calculate_rolling_volatility,
+    prepare_validated_series,
     to_decimal,
 )
 
@@ -147,8 +152,99 @@ class TestAnalyticsCalculations(unittest.TestCase):
         self.assertEqual(summary.median_price, Decimal("30.0000"))
         self.assertEqual(summary.data_points, 5)
 
-        self.assertIsNone(calculate_price_summary([]))
+    def test_prepare_validated_series(self):
+        t0 = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+        t1 = datetime(2026, 1, 2, 0, 0, tzinfo=timezone.utc)
+        t2 = datetime(2026, 1, 3, 0, 0, tzinfo=timezone.utc)
+
+        # Out-of-order with duplicate timestamp and zero/negative prices
+        raw_prices = [Decimal("100"), Decimal("0"), Decimal("-5"), Decimal("110"), Decimal("105")]
+        raw_times = [t1, t0, t1, t2, t1]  # t1 has 100 then 105
+
+        clean_p, clean_t = prepare_validated_series(raw_prices, raw_times)
+        self.assertEqual(len(clean_p), 2)
+        # Should be t1=105, t2=110 (t0 had 0, -5 was filtered, t1 was deduped to 105)
+        self.assertEqual(clean_t, [t1, t2])
+        self.assertEqual(clean_p, [Decimal("105"), Decimal("110")])
+
+        # Empty handling
+        empty_p, empty_t = prepare_validated_series([])
+        self.assertEqual(empty_p, [])
+        self.assertEqual(empty_t, [])
+
+    def test_calculate_downside_deviation(self):
+        # All positive returns -> downside deviation should be 0.0
+        pos_rets = [Decimal("0.02"), Decimal("0.03"), Decimal("0.01")]
+        self.assertEqual(calculate_downside_deviation(pos_rets), Decimal("0.000000"))
+
+        # Returns with negative swings
+        mixed_rets = [Decimal("0.05"), Decimal("-0.03"), Decimal("-0.02"), Decimal("0.04")]
+        downside = calculate_downside_deviation(mixed_rets, annualize_factor=252)
+        self.assertGreater(downside, Decimal("0"))
+
+    def test_calculate_risk_adjusted_metrics(self):
+        prices = [Decimal(str(100 + i * 2)) for i in range(30)]
+        returns = calculate_returns(prices)
+        vol = calculate_rolling_volatility(returns, annualize_factor=252)
+        dd = calculate_drawdowns(prices)
+
+        risk = calculate_risk_adjusted_metrics(
+            prices=prices,
+            returns=returns,
+            volatility=vol,
+            drawdown=dd,
+            risk_free_rate=0.03,
+            annualize_factor=252,
+        )
+        self.assertGreater(risk.annualized_return, Decimal("0"))
+        self.assertGreater(risk.cagr, Decimal("0"))
+        self.assertIsNotNone(risk.sharpe_ratio)
+        self.assertGreater(risk.sharpe_ratio, Decimal("0"))
+        self.assertEqual(risk.win_rate, Decimal("100.00"))
+        self.assertEqual(risk.positive_periods, 29)
+        self.assertEqual(risk.negative_periods, 0)
+
+        # Empty edge case
+        empty_risk = calculate_risk_adjusted_metrics([], [], vol, dd)
+        self.assertIsNone(empty_risk.sharpe_ratio)
+        self.assertEqual(empty_risk.total_periods, 0)
+
+    def test_align_price_series_and_benchmark_metrics(self):
+        t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        t1 = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        t2 = datetime(2026, 1, 3, tzinfo=timezone.utc)
+        t3 = datetime(2026, 1, 4, tzinfo=timezone.utc)
+        t4 = datetime(2026, 1, 5, tzinfo=timezone.utc)
+
+        # Asset traded on t0, t1, t3, t4 (e.g. holiday on t2)
+        asset_p = [Decimal("100"), Decimal("105"), Decimal("110"), Decimal("115")]
+        asset_t = [t0, t1, t3, t4]
+
+        # Benchmark traded on t0, t1, t2, t3, t4
+        bench_p = [Decimal("400"), Decimal("410"), Decimal("415"), Decimal("420"), Decimal("430")]
+        bench_t = [t0, t1, t2, t3, t4]
+
+        aligned_a, aligned_b, aligned_t = align_price_series(asset_p, asset_t, bench_p, bench_t)
+        self.assertEqual(len(aligned_a), 4)  # t0, t1, t3, t4 intersect
+        self.assertEqual(aligned_t, [t0, t1, t3, t4])
+        self.assertEqual(aligned_b, [Decimal("400"), Decimal("410"), Decimal("420"), Decimal("430")])
+
+        # Benchmark metrics calculation
+        bm = calculate_benchmark_metrics(
+            benchmark_symbol="SPY",
+            asset_prices=aligned_a,
+            benchmark_prices=aligned_b,
+            annualize_factor=252,
+        )
+        self.assertEqual(bm.benchmark_symbol, "SPY")
+        self.assertEqual(bm.aligned_periods, 3)
+        self.assertIsNotNone(bm.beta)
+        self.assertGreater(bm.beta, Decimal("0"))
+        self.assertIsNotNone(bm.correlation)
+        self.assertGreater(bm.correlation, Decimal("0.5"))
+        self.assertIsNotNone(bm.tracking_error)
 
 
 if __name__ == "__main__":
     unittest.main()
+

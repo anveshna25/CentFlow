@@ -7,12 +7,17 @@ export const ENDPOINTS = {
   API_V1_HEALTH: '/api/v1/health',
   MARKET_DATA_STATUS: '/api/v1/market-data/status',
   MARKET_DATA_QUOTE: (symbol) => `/api/v1/market-data/quotes/${encodeURIComponent(symbol)}`,
+  MARKET_DATA_QUOTES: (symbols) =>
+    `/api/v1/market-data/quotes?symbols=${encodeURIComponent(Array.isArray(symbols) ? symbols.join(',') : symbols)}`,
   MARKET_DATA_HISTORY: (symbol, days = 30, interval = '1d') =>
     `/api/v1/market-data/history/${encodeURIComponent(symbol)}?days=${days}&interval=${interval}`,
-  MARKET_DATA_INSTRUMENTS: (query = '') =>
-    query
-      ? `/api/v1/market-data/instruments?q=${encodeURIComponent(query)}`
-      : '/api/v1/market-data/instruments',
+  MARKET_DATA_INSTRUMENTS: (query = '', assetType = '') => {
+    const params = new URLSearchParams()
+    if (query) params.set('q', query)
+    if (assetType && assetType !== 'all') params.set('asset_type', assetType)
+    const qs = params.toString()
+    return qs ? `/api/v1/market-data/instruments?${qs}` : '/api/v1/market-data/instruments'
+  },
   MARKET_DATA_INGEST_QUOTE: (symbol) =>
     `/api/v1/market-data/ingest/quote/${encodeURIComponent(symbol)}`,
   MARKET_DATA_BACKFILL: (symbol) =>
@@ -40,6 +45,14 @@ export const ENDPOINTS = {
     if (params.includeAtr !== undefined) query.set('include_atr', String(params.includeAtr))
     return `/api/v1/analytics/indicators/${encodeURIComponent(symbol)}?${query.toString()}`
   },
-  ANALYTICS_RETURNS: (symbol, lookbackDays = 365, interval = '1d', annualizeFactor = 252) =>
-    `/api/v1/analytics/returns/${encodeURIComponent(symbol)}?lookback_days=${lookbackDays}&interval=${interval}&annualize_factor=${annualizeFactor}`,
+  ANALYTICS_RETURNS: (symbol, lookbackDays = 365, interval = '1d', annualizeFactor = 252, benchmark = null, riskFreeRate = 0.0) => {
+    const query = new URLSearchParams({
+      lookback_days: String(lookbackDays),
+      interval,
+      annualize_factor: String(annualizeFactor),
+    })
+    if (benchmark) query.set('benchmark', benchmark)
+    if (riskFreeRate) query.set('risk_free_rate', String(riskFreeRate))
+    return `/api/v1/analytics/returns/${encodeURIComponent(symbol)}?${query.toString()}`
+  },
 }

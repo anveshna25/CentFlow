@@ -1,3 +1,5 @@
+import { Button } from './Button'
+
 /**
  * Default SVG icon presets for financial and workflow empty states.
  */
@@ -95,23 +97,14 @@ export function EmptyState({
           </div>
         </div>
         {action && (
-          <button
+          <Button
             id={action.id || `${id}-action-btn`}
             onClick={action.onClick}
-            style={{
-              background: 'var(--cf-bg-surface-elevated)',
-              color: 'var(--cf-brand-primary)',
-              border: '1px solid var(--cf-border)',
-              borderRadius: 'var(--cf-radius-sm)',
-              padding: '6px 14px',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
+            variant="secondary"
+            size="sm"
           >
             {action.label}
-          </button>
+          </Button>
         )}
       </div>
     )
@@ -190,44 +183,24 @@ export function EmptyState({
           }}
         >
           {action && (
-            <button
+            <Button
               id={action.id || `${id}-action-btn`}
               onClick={action.onClick}
-              style={{
-                background: 'var(--cf-brand-gradient)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 'var(--cf-radius-md)',
-                padding: '9px 20px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: 'var(--cf-brand-glow)',
-                transition: 'opacity var(--cf-transition-fast)',
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.opacity = '0.9')}
-              onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
+              variant="primary"
+              size="md"
             >
               {action.label}
-            </button>
+            </Button>
           )}
           {secondaryAction && (
-            <button
+            <Button
               id={secondaryAction.id || `${id}-secondary-btn`}
               onClick={secondaryAction.onClick}
-              style={{
-                background: 'var(--cf-bg-surface-elevated)',
-                color: 'var(--cf-text-secondary)',
-                border: '1px solid var(--cf-border)',
-                borderRadius: 'var(--cf-radius-md)',
-                padding: '9px 18px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
+              variant="secondary"
+              size="md"
             >
               {secondaryAction.label}
-            </button>
+            </Button>
           )}
         </div>
       )}

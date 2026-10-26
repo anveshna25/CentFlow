@@ -5,6 +5,7 @@ import { useNavigation } from '../state/NavigationContext'
 import {
   searchInstruments,
   getQuote,
+  getQuotes,
   getHistoricalBars,
   ingestQuote,
   backfillHistoricalBars,
@@ -17,15 +18,56 @@ import {
 import { highlightMatch } from '../utils/highlight'
 import { getDefaultWatchlist, addToWatchlist, removeFromWatchlist } from '../api/watchlist'
 
-
 const DEFAULT_INSTRUMENTS = [
   { symbol: 'AAPL', name: 'Apple Inc.', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 185.50, change: '+0.87%', isUp: true, volume: '52.4M' },
   { symbol: 'MSFT', name: 'Microsoft Corporation', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 420.25, change: '+0.83%', isUp: true, volume: '21.3M' },
   { symbol: 'GOOGL', name: 'Alphabet Inc.', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 175.80, change: '+1.27%', isUp: true, volume: '18.2M' },
+  { symbol: 'NVDA', name: 'NVIDIA Corporation', assetType: 'equity', exchange: 'NASDAQ', market: 'US Equities', price: 128.40, change: '+2.11%', isUp: true, volume: '78.5M' },
   { symbol: 'BTC-USD', name: 'Bitcoin USD', assetType: 'crypto', exchange: 'Coinbase', market: 'Crypto', price: 65400.00, change: '+1.95%', isUp: true, volume: '28.5K' },
   { symbol: 'ETH-USD', name: 'Ethereum USD', assetType: 'crypto', exchange: 'Coinbase', market: 'Crypto', price: 3450.00, change: '+1.77%', isUp: true, volume: '192K' },
   { symbol: 'SPY', name: 'SPDR S&P 500 ETF Trust', assetType: 'etf', exchange: 'NYSE', market: 'US ETFs', price: 510.15, change: '+0.50%', isUp: true, volume: '65.0M' },
+  { symbol: 'QQQ', name: 'Invesco QQQ Trust (Nasdaq 100)', assetType: 'etf', exchange: 'NASDAQ', market: 'US ETFs', price: 442.80, change: '+0.75%', isUp: true, volume: '42.1M' },
 ]
+
+function formatVolume(rawVolume) {
+  if (rawVolume == null) return 'N/A'
+  const vol = Number(rawVolume)
+  if (isNaN(vol) || vol <= 0) return 'N/A'
+  if (vol >= 1000000) return `${(vol / 1000000).toFixed(1)}M`
+  if (vol >= 1000) return `${(vol / 1000).toFixed(1)}K`
+  return String(vol)
+}
+
+function enrichInstrumentWithQuote(inst, quote) {
+  const rawType = inst.asset_type || inst.assetType || 'equity'
+  const normType = rawType.toLowerCase() === 'cryptocurrency' ? 'crypto' : rawType.toLowerCase()
+  if (quote) {
+    const isUp = typeof quote.change === 'number' ? quote.change >= 0 : !String(quote.change || '').startsWith('-')
+    const changePct = quote.change_percent != null ? Number(quote.change_percent) : 0
+    return {
+      symbol: inst.symbol,
+      name: inst.name,
+      assetType: normType,
+      exchange: inst.exchange || 'N/A',
+      market: inst.market || 'Global',
+      price: Number(quote.price || 0),
+      change: `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`,
+      isUp,
+      volume: formatVolume(quote.volume),
+    }
+  }
+  return {
+    symbol: inst.symbol,
+    name: inst.name,
+    assetType: normType,
+    exchange: inst.exchange || 'N/A',
+    market: inst.market || 'Global',
+    price: inst.price || 0,
+    change: inst.change || '0.00%',
+    isUp: inst.isUp ?? true,
+    volume: inst.volume || 'N/A',
+  }
+}
 
 const TIMEFRAME_CONFIG = {
   '1D': { days: 1, interval: '1d' },
@@ -72,112 +114,73 @@ export function MarketsPage({ externalSearch = '' }) {
     return () => clearTimeout(handler)
   }, [localSearch])
 
-  // Initial and on-demand load of instruments
-  const loadInstruments = useCallback(async () => {
-    setError(null)
-    setIsLoading(true)
-    try {
-      const res = await searchInstruments(activeSearch)
-      if (res?.data && res.data.length > 0) {
-        const enriched = await Promise.all(
-          res.data.map(async (inst) => {
-            try {
-              const quoteRes = await getQuote(inst.symbol)
-              const q = quoteRes?.data
-              if (q) {
-                const isUp = typeof q.change === 'number' ? q.change >= 0 : !String(q.change || '').startsWith('-')
-                return {
-                  symbol: inst.symbol,
-                  name: inst.name,
-                  assetType: inst.asset_type || 'equity',
-                  exchange: inst.exchange || 'N/A',
-                  market: inst.market || 'Global',
-                  price: Number(q.price),
-                  change: `${q.change_percent >= 0 ? '+' : ''}${q.change_percent}%`,
-                  isUp,
-                  volume: q.volume ? `${(Number(q.volume) / 1000000).toFixed(1)}M` : 'N/A',
-                }
-              }
-            } catch {
-              // Ignore individual quote errors
-            }
-            return {
-              symbol: inst.symbol,
-              name: inst.name,
-              assetType: inst.asset_type || 'equity',
-              exchange: inst.exchange || 'N/A',
-              market: inst.market || 'Global',
-              price: 0,
-              change: '0.00%',
-              isUp: true,
-              volume: 'N/A',
-            }
-          })
-        )
-        setInstruments(enriched)
-      }
-    } catch (err) {
-      setError(err)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [activeSearch])
+  const [retryCount, setRetryCount] = useState(0)
+  const handleRetry = useCallback(() => setRetryCount((c) => c + 1), [])
 
+  // Initial and on-demand load of instruments with single-call batch quote enrichment
   useEffect(() => {
     let isCancelled = false
-    const fetchCatalog = async () => {
+
+    const fetchInstruments = async () => {
+      setError(null)
+      setIsLoading(true)
       try {
-        const res = await searchInstruments(activeSearch)
-        if (!isCancelled && res?.data && res.data.length > 0) {
-          const enriched = await Promise.all(
-            res.data.map(async (inst) => {
-              try {
-                const quoteRes = await getQuote(inst.symbol)
-                const q = quoteRes?.data
-                if (q) {
-                  const isUp = typeof q.change === 'number' ? q.change >= 0 : !String(q.change || '').startsWith('-')
-                  return {
-                    symbol: inst.symbol,
-                    name: inst.name,
-                    assetType: inst.asset_type || 'equity',
-                    exchange: inst.exchange || 'N/A',
-                    market: inst.market || 'Global',
-                    price: Number(q.price),
-                    change: `${q.change_percent >= 0 ? '+' : ''}${q.change_percent}%`,
-                    isUp,
-                    volume: q.volume ? `${(Number(q.volume) / 1000000).toFixed(1)}M` : 'N/A',
-                  }
-                }
-              } catch {
-                // Ignore individual quote error
-              }
-              return {
-                symbol: inst.symbol,
-                name: inst.name,
-                assetType: inst.asset_type || 'equity',
-                exchange: inst.exchange || 'N/A',
-                market: inst.market || 'Global',
-                price: 0,
-                change: '0.00%',
-                isUp: true,
-                volume: 'N/A',
-              }
-            })
-          )
-          if (!isCancelled) {
-            setInstruments(enriched)
+        const categoryParam = selectedCategory !== 'all' ? selectedCategory : ''
+        let candidateInstruments = []
+
+        if (activeSearch || categoryParam) {
+          const res = await searchInstruments(activeSearch, categoryParam)
+          if (res?.data && res.data.length > 0) {
+            candidateInstruments = res.data
+          } else if (activeSearch) {
+            candidateInstruments = []
+          } else {
+            candidateInstruments = DEFAULT_INSTRUMENTS.filter(
+              (i) => i.assetType.toLowerCase() === categoryParam.toLowerCase()
+            )
           }
+        } else {
+          candidateInstruments = DEFAULT_INSTRUMENTS
+        }
+
+        if (isCancelled) return
+
+        if (candidateInstruments.length === 0) {
+          setInstruments([])
+          return
+        }
+
+        // Batch enrich with live quotes from backend QuoteService in a single request
+        const symbols = candidateInstruments.map((i) => i.symbol)
+        const quotesRes = await getQuotes(symbols).catch(() => null)
+        if (isCancelled) return
+
+        const quotesMap = new Map(
+          (quotesRes?.data || []).map((q) => [q.symbol.toUpperCase(), q])
+        )
+
+        const enriched = candidateInstruments.map((inst) =>
+          enrichInstrumentWithQuote(inst, quotesMap.get(inst.symbol.toUpperCase()))
+        )
+        if (!isCancelled) {
+          setInstruments(enriched)
         }
       } catch (err) {
-        if (!isCancelled) setError(err)
+        if (!isCancelled) {
+          setError(err)
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false)
+        }
       }
     }
 
-    fetchCatalog()
+    fetchInstruments()
     return () => {
       isCancelled = true
     }
-  }, [activeSearch])
+  }, [activeSearch, selectedCategory, retryCount])
 
   // Load historical bars, indicators, quote, and market intelligence when selecting an instrument
   useEffect(() => {
@@ -384,7 +387,7 @@ export function MarketsPage({ externalSearch = '' }) {
         <ErrorState
           error={error}
           compact
-          onRetry={loadInstruments}
+          onRetry={handleRetry}
           id="cf-markets-error-banner"
         />
       )}

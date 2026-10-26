@@ -5,21 +5,27 @@ from typing import Any, Optional
 from sqlalchemy.orm import Session
 
 from app.analytics.calculations import (
+    align_price_series,
+    calculate_benchmark_metrics,
     calculate_drawdowns,
     calculate_period_return,
     calculate_price_summary,
     calculate_returns,
+    calculate_risk_adjusted_metrics,
     calculate_rolling_volatility,
+    prepare_validated_series,
     to_decimal,
 )
 from app.analytics.domain import (
     ATRResult,
+    BenchmarkMetrics,
     BollingerBandsResult,
     DrawdownMetric,
     MACDResult,
     MarketIntelligenceSummary,
     PeriodReturn,
     PriceSeriesSummary,
+    RiskAdjustedMetrics,
     VolatilityMetrics,
 )
 from app.analytics.indicators import (
@@ -66,6 +72,9 @@ class AnalyticsService:
         now = datetime.now(timezone.utc)
         start = now - timedelta(days=lookback_days)
 
+        raw_prices: list[Decimal] = []
+        raw_timestamps: list[datetime] = []
+
         # 1. If database session is present, attempt to query persisted prices
         if self._db and self._price_repo and self._instrument_repo:
             instrument = self._instrument_repo.get_by_symbol(clean_symbol)
@@ -77,21 +86,22 @@ class AnalyticsService:
                     interval=interval,
                 )
                 if len(prices_models) >= 10:  # Valid series in DB
-                    prices = [to_decimal(m.close or m.value) for m in prices_models]
-                    timestamps = [m.timestamp for m in prices_models]
-                    return prices, timestamps
+                    raw_prices = [to_decimal(m.close or m.value) for m in prices_models]
+                    raw_timestamps = [m.timestamp for m in prices_models]
 
-        # 2. Query market data service (provider/cache)
-        bars = await self._market_data_service.get_historical_bars(
-            symbol=clean_symbol,
-            start=start,
-            end=now,
-            interval=interval,
-        )
+        # 2. Query market data service (provider/cache) if DB was empty or incomplete
+        if not raw_prices:
+            bars = await self._market_data_service.get_historical_bars(
+                symbol=clean_symbol,
+                start=start,
+                end=now,
+                interval=interval,
+            )
+            raw_prices = [to_decimal(b.close) for b in bars]
+            raw_timestamps = [b.timestamp for b in bars]
 
-        prices = [to_decimal(b.close) for b in bars]
-        timestamps = [b.timestamp for b in bars]
-        return prices, timestamps
+        # Clean, deduplicate timestamps, sort, and handle gaps with exact precision
+        return prepare_validated_series(raw_prices, raw_timestamps)
 
     async def get_ohlcv_series(
         self,
@@ -153,24 +163,57 @@ class AnalyticsService:
         interval: str = "1d",
         lookback_days: int = 365,
         annualize_factor: int = 252,
+        benchmark_symbol: Optional[str] = None,
+        risk_free_rate: float = 0.0,
     ) -> dict[str, Any]:
-        """Compute performance returns, drawdowns, and volatility metrics."""
-        prices, timestamps = await self.get_price_series(symbol, interval, lookback_days)
+        """Compute performance returns, drawdowns, volatility, risk-adjusted metrics, and benchmark analysis."""
+        clean_symbol = symbol.strip().upper()
+        prices, timestamps = await self.get_price_series(clean_symbol, interval, lookback_days)
 
         period_return = calculate_period_return(prices, timestamps)
         returns = calculate_returns(prices)
         volatility = calculate_rolling_volatility(returns, annualize_factor=annualize_factor)
         drawdown = calculate_drawdowns(prices)
         summary = calculate_price_summary(prices)
+        risk_metrics = calculate_risk_adjusted_metrics(
+            prices=prices,
+            returns=returns,
+            volatility=volatility,
+            drawdown=drawdown,
+            risk_free_rate=risk_free_rate,
+            annualize_factor=annualize_factor,
+        )
+
+        benchmark_metrics: Optional[BenchmarkMetrics] = None
+        if benchmark_symbol and benchmark_symbol.strip():
+            clean_bench = benchmark_symbol.strip().upper()
+            try:
+                bench_prices, bench_timestamps = await self.get_price_series(
+                    clean_bench, interval, lookback_days
+                )
+                aligned_asset, aligned_bench, _ = align_price_series(
+                    prices, timestamps, bench_prices, bench_timestamps
+                )
+                if len(aligned_asset) >= 2 and len(aligned_bench) >= 2:
+                    benchmark_metrics = calculate_benchmark_metrics(
+                        benchmark_symbol=clean_bench,
+                        asset_prices=aligned_asset,
+                        benchmark_prices=aligned_bench,
+                        annualize_factor=annualize_factor,
+                    )
+            except Exception:
+                pass
 
         return {
-            "symbol": symbol.strip().upper(),
+            "symbol": clean_symbol,
             "interval": interval,
             "lookback_days": lookback_days,
             "period_return": period_return,
             "volatility": volatility,
             "drawdown": drawdown,
             "summary": summary,
+            "risk_metrics": risk_metrics,
+            "benchmark": benchmark_metrics,
         }
 
     async def get_technical_indicators(

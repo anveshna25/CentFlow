@@ -110,8 +110,12 @@ class BaseMarketDataProvider(ABC):
         pass
 
     @abstractmethod
-    async def search_instruments(self, query: str) -> Sequence[ProviderInstrument]:
-        """Search instruments matching the query string by symbol or name."""
+    async def search_instruments(
+        self,
+        query: str = "",
+        asset_type: Optional[str] = None,
+    ) -> Sequence[ProviderInstrument]:
+        """Search instruments matching the query string by symbol, name, or asset type."""
         pass
 
     async def lookup_asset(self, symbol: str) -> Optional[ProviderInstrument]:

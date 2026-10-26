@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 from sqlalchemy.orm import Session
 from app.api.schemas.portfolio import (
     PortfolioCreateRequest,
@@ -23,20 +23,54 @@ class PortfolioService:
         self.instrument_repo = InstrumentRepository(db)
         self.market_data_service = market_data_service or MarketDataService()
 
-    async def _calculate_position_metrics(self, pos: PositionModel) -> PositionResponse:
-        """Calculate market value, cost basis, and unrealized P&L using real-time quotes."""
+    async def _calculate_position_metrics(
+        self,
+        pos: PositionModel,
+        quote: Optional[Any] = None,
+    ) -> PositionResponse:
+        """Calculate market value, cost basis, unrealized P&L, and daily movement using real-time quotes."""
         symbol = pos.instrument.symbol if pos.instrument else "UNKNOWN"
         name = pos.instrument.name if pos.instrument else symbol
-        asset_type = pos.instrument.asset_type.value if hasattr(pos.instrument, "asset_type") and hasattr(pos.instrument.asset_type, "value") else (str(getattr(pos.instrument, "asset_type", "equity")))
+        asset_type = (
+            pos.instrument.asset_type.value
+            if hasattr(pos.instrument, "asset_type") and hasattr(pos.instrument.asset_type, "value")
+            else str(getattr(pos.instrument, "asset_type", "equity"))
+        )
 
         current_price = pos.average_price
-        try:
-            quote = await self.market_data_service.get_quote(symbol)
-            if quote and quote.price is not None:
-                current_price = Decimal(str(quote.price))
-        except Exception:
-            # Fallback to average entry price if quote fails (offline or non-catalog symbol)
+        is_stale = False
+        daily_pnl = Decimal("0.00")
+        daily_pnl_percent = Decimal("0.00")
+
+        if quote is None:
+            try:
+                quote = await self.market_data_service.get_quote(symbol)
+            except Exception:
+                quote = None
+
+        if quote and getattr(quote, "price", None) is not None:
+            current_price = Decimal(str(quote.price))
+            is_stale = bool(getattr(quote, "is_stale", False))
+
+            # Daily P&L calculation
+            if getattr(quote, "change", None) is not None:
+                daily_pnl = pos.quantity * Decimal(str(quote.change))
+            elif getattr(quote, "previous_close", None) is not None and Decimal(str(quote.previous_close)) > Decimal("0"):
+                daily_pnl = pos.quantity * (current_price - Decimal(str(quote.previous_close)))
+            else:
+                daily_pnl = Decimal("0.00")
+
+            if getattr(quote, "change_percent", None) is not None:
+                daily_pnl_percent = Decimal(str(quote.change_percent))
+            elif getattr(quote, "previous_close", None) is not None and Decimal(str(quote.previous_close)) > Decimal("0"):
+                prev_c = Decimal(str(quote.previous_close))
+                daily_pnl_percent = ((current_price - prev_c) / prev_c) * Decimal("100")
+            else:
+                daily_pnl_percent = Decimal("0.00")
+        else:
+            # Fallback to entry price if quote fails (offline or non-catalog symbol)
             current_price = pos.average_price
+            is_stale = True
 
         qty = pos.quantity
         avg_price = pos.average_price
@@ -62,15 +96,36 @@ class PortfolioService:
             market_value=market_value.quantize(Decimal("0.01")),
             unrealized_pnl=unrealized_pnl.quantize(Decimal("0.01")),
             unrealized_pnl_percent=unrealized_pnl_percent.quantize(Decimal("0.01")),
+            daily_pnl=daily_pnl.quantize(Decimal("0.01")),
+            daily_pnl_percent=daily_pnl_percent.quantize(Decimal("0.01")),
+            is_stale=is_stale,
             currency=pos.currency or "USD",
             opened_at=pos.opened_at,
         )
 
     async def _build_portfolio_response(self, portfolio: PortfolioModel) -> PortfolioResponse:
-        """Construct a full PortfolioResponse with real-time valuation aggregation."""
+        """Construct a full PortfolioResponse with real-time valuation aggregation and batch quote retrieval."""
+        # Execute batch quote lookup across all distinct position symbols
+        symbols = [
+            pos.instrument.symbol.upper()
+            for pos in portfolio.positions
+            if pos.instrument and pos.instrument.symbol
+        ]
+        quotes_map: dict[str, Any] = {}
+        if symbols:
+            try:
+                quotes = await self.market_data_service.get_quotes(symbols, allow_partial=True)
+                for q in quotes:
+                    if q and getattr(q, "symbol", None):
+                        quotes_map[q.symbol.upper()] = q
+            except Exception:
+                pass
+
         pos_responses: list[PositionResponse] = []
         for pos in portfolio.positions:
-            pos_response = await self._calculate_position_metrics(pos)
+            sym = pos.instrument.symbol.upper() if pos.instrument and pos.instrument.symbol else None
+            quote = quotes_map.get(sym) if sym else None
+            pos_response = await self._calculate_position_metrics(pos, quote=quote)
             pos_responses.append(pos_response)
 
         total_valuation = sum((p.market_value for p in pos_responses), Decimal("0"))
@@ -82,6 +137,15 @@ class PortfolioService:
             else Decimal("0")
         )
 
+        total_daily_pnl = sum((p.daily_pnl for p in pos_responses if p.daily_pnl is not None), Decimal("0"))
+        previous_total_valuation = total_valuation - total_daily_pnl
+        total_daily_pnl_percent = (
+            (total_daily_pnl / previous_total_valuation * Decimal("100"))
+            if previous_total_valuation > Decimal("0")
+            else Decimal("0")
+        )
+        is_stale = any(p.is_stale for p in pos_responses) if pos_responses else False
+
         return PortfolioResponse(
             id=portfolio.id,
             name=portfolio.name,
@@ -91,6 +155,9 @@ class PortfolioService:
             total_cost_basis=total_cost_basis.quantize(Decimal("0.01")),
             total_unrealized_pnl=total_unrealized_pnl.quantize(Decimal("0.01")),
             total_unrealized_pnl_percent=total_unrealized_pnl_percent.quantize(Decimal("0.01")),
+            total_daily_pnl=total_daily_pnl.quantize(Decimal("0.01")),
+            total_daily_pnl_percent=total_daily_pnl_percent.quantize(Decimal("0.01")),
+            is_stale=is_stale,
             positions_count=len(pos_responses),
             positions=pos_responses,
             created_at=portfolio.created_at,
