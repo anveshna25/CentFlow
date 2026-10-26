@@ -39,6 +39,14 @@ export const ENDPOINTS = {
     if (params.includeBollinger !== undefined) query.set('include_bollinger', String(params.includeBollinger))
     return `/api/v1/analytics/indicators/${encodeURIComponent(symbol)}?${query.toString()}`
   },
-  ANALYTICS_RETURNS: (symbol, lookbackDays = 365, interval = '1d', annualizeFactor = 252) =>
-    `/api/v1/analytics/returns/${encodeURIComponent(symbol)}?lookback_days=${lookbackDays}&interval=${interval}&annualize_factor=${annualizeFactor}`,
+  ANALYTICS_RETURNS: (symbol, lookbackDays = 365, interval = '1d', annualizeFactor = 252, benchmark = null, riskFreeRate = 0.0) => {
+    const query = new URLSearchParams({
+      lookback_days: String(lookbackDays),
+      interval,
+      annualize_factor: String(annualizeFactor),
+    })
+    if (benchmark) query.set('benchmark', benchmark)
+    if (riskFreeRate) query.set('risk_free_rate', String(riskFreeRate))
+    return `/api/v1/analytics/returns/${encodeURIComponent(symbol)}?${query.toString()}`
+  },
 }

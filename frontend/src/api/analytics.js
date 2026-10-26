@@ -31,14 +31,16 @@ export async function getIndicatorSeries(symbol, lookbackDays = 365, interval = 
 }
 
 /**
- * Fetch performance and risk distribution analysis (period return, volatility, max drawdown).
+ * Fetch performance, risk-adjusted returns, and comparative benchmark analysis.
  *
  * @param {string} symbol - Asset ticker symbol.
  * @param {number} lookbackDays - Historical lookback window in days.
  * @param {string} interval - Bar frequency (e.g., '1d').
  * @param {number} annualizeFactor - Annualization scalar (252 for daily trading days).
- * @returns {Promise<{data: Object}>} Response envelope containing returns analysis.
+ * @param {string|null} benchmark - Benchmark ticker symbol (e.g., 'SPY').
+ * @param {number} riskFreeRate - Annual risk-free rate scalar (e.g., 0.04 for 4%).
+ * @returns {Promise<{data: Object}>} Response envelope containing returns and benchmark analysis.
  */
-export async function getReturnsAnalysis(symbol, lookbackDays = 365, interval = '1d', annualizeFactor = 252) {
-  return apiClient(ENDPOINTS.ANALYTICS_RETURNS(symbol, lookbackDays, interval, annualizeFactor))
+export async function getReturnsAnalysis(symbol, lookbackDays = 365, interval = '1d', annualizeFactor = 252, benchmark = null, riskFreeRate = 0.0) {
+  return apiClient(ENDPOINTS.ANALYTICS_RETURNS(symbol, lookbackDays, interval, annualizeFactor, benchmark, riskFreeRate))
 }
