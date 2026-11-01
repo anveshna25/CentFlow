@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 from pydantic import Field
 from app.api.schemas.base import BaseSchema
 
@@ -24,6 +24,7 @@ class QuoteResponseSchema(BaseSchema):
     delay_minutes: int = Field(default=0, description="Provider data delay in minutes (0 for real-time).")
     data_source: Optional[str] = Field(default=None, description="Source market data provider identifier.")
     staleness_seconds: Optional[int] = Field(default=None, description="Elapsed seconds since quote timestamp.")
+    freshness_label: Optional[str] = Field(default=None, description="Human-readable freshness indicator (e.g. 'Updated 2m ago', 'Delayed 15m').")
 
 
 class BarResponseSchema(BaseSchema):
@@ -88,6 +89,7 @@ class ProviderStatusSchema(BaseSchema):
     message: Optional[str] = Field(default=None, description="Optional diagnostic message.")
     latency_ms: Optional[float] = Field(default=None, description="Round-trip latency in milliseconds.")
     capabilities: Optional[ProviderCapabilitiesSchema] = Field(default=None, description="Provider capabilities.")
+    circuit_breaker: Optional[dict[str, Any]] = Field(default=None, description="Circuit breaker health and state metrics.")
 
 
 class PersistedPriceSchema(BaseSchema):

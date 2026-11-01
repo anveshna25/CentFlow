@@ -39,6 +39,7 @@ class MarketQuote:
     delay_minutes: int = 0
     data_source: str = "unknown"
     staleness_seconds: Optional[int] = None
+    freshness_label: str = "Real-time"
 
 
 def sanitize_symbol(symbol: str) -> str:
@@ -140,6 +141,51 @@ def calculate_staleness(
     return staleness_seconds, is_stale
 
 
+def format_freshness_label(
+    timestamp: datetime,
+    now_utc: datetime,
+    delay_minutes: int = 0,
+    is_stale: bool = False,
+) -> str:
+    """Format human-readable freshness indicator (e.g. 'Updated 2m ago', 'Delayed 15m')."""
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    else:
+        timestamp = timestamp.astimezone(timezone.utc)
+
+    elapsed_seconds = max(0, int((now_utc - timestamp).total_seconds()))
+
+    if is_stale:
+        if elapsed_seconds < 60:
+            return "Stale (cached just now)"
+        elif elapsed_seconds < 3600:
+            mins = elapsed_seconds // 60
+            return f"Stale (cached {mins}m ago)"
+        elif elapsed_seconds < 86400:
+            hours = elapsed_seconds // 3600
+            return f"Stale (cached {hours}h ago)"
+        else:
+            days = elapsed_seconds // 86400
+            return f"Stale (cached {days}d ago)"
+
+    if delay_minutes > 0:
+        return f"Delayed {delay_minutes}m"
+
+    if elapsed_seconds < 10:
+        return "Real-time"
+    elif elapsed_seconds < 60:
+        return f"Updated {elapsed_seconds}s ago"
+    elif elapsed_seconds < 3600:
+        mins = elapsed_seconds // 60
+        return f"Updated {mins}m ago"
+    elif elapsed_seconds < 86400:
+        hours = elapsed_seconds // 3600
+        return f"Updated {hours}h ago"
+    else:
+        days = elapsed_seconds // 86400
+        return f"Updated {days}d ago"
+
+
 def validate_and_normalize_quote(
     raw_quote: ProviderQuote,
     provider: BaseMarketDataProvider,
@@ -196,6 +242,13 @@ def validate_and_normalize_quote(
         threshold_seconds=staleness_threshold,
         market_status=market_status,
     )
+    evaluated_stale = raw_quote.is_stale or is_stale
+    freshness_label = format_freshness_label(
+        timestamp=ts,
+        now_utc=now_utc,
+        delay_minutes=provider.capabilities.delay_minutes,
+        is_stale=evaluated_stale,
+    )
 
     return MarketQuote(
         symbol=raw_quote.symbol,
@@ -210,10 +263,11 @@ def validate_and_normalize_quote(
         change=change,
         change_percent=change_pct,
         market_status=market_status,
-        is_stale=raw_quote.is_stale or is_stale,
+        is_stale=evaluated_stale,
         delay_minutes=provider.capabilities.delay_minutes,
         data_source=provider.name,
         staleness_seconds=staleness_seconds,
+        freshness_label=freshness_label,
     )
 
 

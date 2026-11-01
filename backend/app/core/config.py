@@ -39,6 +39,10 @@ class Settings:
     cache_eviction_policy: str = "lru"
     cache_stale_grace_seconds: int = 86400
     quote_staleness_threshold_seconds: int = 900
+    circuit_breaker_enabled: bool = True
+    circuit_breaker_failure_threshold: int = 5
+    circuit_breaker_recovery_timeout_seconds: float = 30.0
+    circuit_breaker_fallback_provider: str = "mock"
     cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
     api_v1_prefix: str = "/api/v1"
     debug: bool = False
@@ -64,6 +68,9 @@ def get_settings() -> Settings:
     cache_enabled_env = os.getenv("MARKET_DATA_CACHE_ENABLED", "true").lower()
     cache_enabled = cache_enabled_env in ("1", "true", "yes", "on")
 
+    cb_enabled_env = os.getenv("CIRCUIT_BREAKER_ENABLED", "true").lower()
+    cb_enabled = cb_enabled_env in ("1", "true", "yes", "on")
+
     return Settings(
         app_name=os.getenv("APP_NAME", "CentFlow"),
         app_env=env,
@@ -80,6 +87,10 @@ def get_settings() -> Settings:
         cache_eviction_policy=os.getenv("CACHE_EVICTION_POLICY", "lru").lower(),
         cache_stale_grace_seconds=int(os.getenv("CACHE_STALE_GRACE_SECONDS", "86400")),
         quote_staleness_threshold_seconds=int(os.getenv("QUOTE_STALENESS_THRESHOLD_SECONDS", "900")),
+        circuit_breaker_enabled=cb_enabled,
+        circuit_breaker_failure_threshold=int(os.getenv("CIRCUIT_BREAKER_FAILURE_THRESHOLD", "5")),
+        circuit_breaker_recovery_timeout_seconds=float(os.getenv("CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS", "30.0")),
+        circuit_breaker_fallback_provider=os.getenv("CIRCUIT_BREAKER_FALLBACK_PROVIDER", "mock").lower(),
         cors_origins=cors_origins,
         api_v1_prefix=os.getenv("API_V1_PREFIX", "/api/v1"),
         debug=(env == "development"),

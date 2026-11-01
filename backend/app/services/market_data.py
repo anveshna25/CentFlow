@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, Optional
 
+from app.core.circuit_breaker import CircuitBreaker
 from app.core.config import get_settings
 from app.domain.models import Instrument, Price
 from app.providers.base import (
@@ -23,8 +24,8 @@ class MarketDataService:
     """Application service for orchestrating market data operations.
 
     Serves as the clean architectural boundary between API/business layers
-    and external market data provider adapters, incorporating caching
-    and rate-limiting layers.
+    and external market data provider adapters, incorporating caching,
+    circuit breaking, rate-limiting, and multi-tier failover layers.
     """
 
     def __init__(
@@ -33,10 +34,28 @@ class MarketDataService:
         enable_cache: Optional[bool] = None,
         db: Optional[Any] = None,
         cache: Optional[Any] = None,
+        circuit_breaker: Optional[CircuitBreaker] = None,
+        fallback_provider: Optional[BaseMarketDataProvider] = None,
     ) -> None:
         raw_provider = provider or get_provider()
         settings = get_settings()
         should_cache = enable_cache if enable_cache is not None else settings.market_data_cache_enabled
+
+        cb = circuit_breaker
+        if cb is None and settings.circuit_breaker_enabled:
+            cb = CircuitBreaker(
+                name=raw_provider.name,
+                failure_threshold=settings.circuit_breaker_failure_threshold,
+                recovery_timeout=settings.circuit_breaker_recovery_timeout_seconds,
+            )
+
+        fb = fallback_provider
+        if fb is None and settings.circuit_breaker_fallback_provider:
+            if settings.circuit_breaker_fallback_provider.lower() != raw_provider.name.lower():
+                try:
+                    fb = get_provider(settings.circuit_breaker_fallback_provider)
+                except Exception:
+                    fb = None
 
         if should_cache and not isinstance(raw_provider, CachedMarketDataProvider):
             db_fallback_fn = self._create_db_quote_fallback(db) if db is not None else None
@@ -54,6 +73,8 @@ class MarketDataService:
                 enabled=True,
                 db_fallback_fn=db_fallback_fn,
                 db_history_fallback_fn=db_history_fallback_fn,
+                circuit_breaker=cb,
+                fallback_provider=fb,
             )
         else:
             self._provider = raw_provider
@@ -105,36 +126,53 @@ class MarketDataService:
             if inst is None:
                 return []
             price_repo = PriceRepository(db)
-            prices = price_repo.get_historical_prices(inst.id, start=start, end=end, interval=interval)
-            return [
-                ProviderBar(
-                    symbol=inst.symbol,
-                    timestamp=p.timestamp,
-                    open=p.open or p.price,
-                    high=p.high or p.price,
-                    low=p.low or p.price,
-                    close=p.close or p.price,
-                    volume=p.volume or Decimal("0"),
+            db_prices = price_repo.get_price_history(
+                instrument_id=inst.id,
+                start=start,
+                end=end,
+                interval=interval,
+            )
+            bars: list[ProviderBar] = []
+            for p in db_prices:
+                open_val = p.open if p.open is not None else p.price
+                high_val = p.high if p.high is not None else p.price
+                low_val = p.low if p.low is not None else p.price
+                close_val = p.close if p.close is not None else p.price
+                vol_val = p.volume if p.volume is not None else Decimal("0")
+                bars.append(
+                    ProviderBar(
+                        symbol=inst.symbol,
+                        timestamp=p.timestamp,
+                        open=open_val,
+                        high=high_val,
+                        low=low_val,
+                        close=close_val,
+                        volume=vol_val,
+                    )
                 )
-                for p in prices
-            ]
+            return bars
 
         return fallback
 
     @property
     def provider(self) -> BaseMarketDataProvider:
-        """The active market data provider instance."""
+        """The active market data provider (cached or direct)."""
         return self._provider
 
     @property
     def quote_service(self) -> QuoteService:
-        """The dedicated QuoteService instance."""
+        """The initialized QuoteService instance."""
         return self._quote_service
 
     @property
     def history_service(self) -> HistoryService:
-        """The dedicated HistoryService instance."""
+        """The initialized HistoryService instance."""
         return self._history_service
+
+    @property
+    def name(self) -> str:
+        """Identifier of active market data provider."""
+        return self._provider.name
 
     @property
     def capabilities(self):

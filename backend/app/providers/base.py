@@ -73,6 +73,7 @@ class ProviderStatus:
     message: Optional[str] = None
     latency_ms: Optional[float] = None
     capabilities: Optional[ProviderCapabilities] = None
+    circuit_breaker: Optional[dict[str, Any]] = None
 
 
 class BaseMarketDataProvider(ABC):
