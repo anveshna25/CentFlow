@@ -70,6 +70,30 @@ class BadRequestError(CentFlowException):
         )
 
 
+class AuthenticationError(CentFlowException):
+    """Raised when authentication credentials are invalid or missing."""
+
+    def __init__(self, message: str = "Authentication required.", details: Optional[list[dict[str, Any]]] = None):
+        super().__init__(
+            message=message,
+            code="UNAUTHENTICATED",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            details=details,
+        )
+
+
+class AuthorizationError(CentFlowException):
+    """Raised when an authenticated user attempts to access a forbidden resource."""
+
+    def __init__(self, message: str = "Access denied.", details: Optional[list[dict[str, Any]]] = None):
+        super().__init__(
+            message=message,
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN,
+            details=details,
+        )
+
+
 class ProviderError(CentFlowException):
     """Base exception for market data provider errors."""
 

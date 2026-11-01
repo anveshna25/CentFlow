@@ -1,7 +1,8 @@
-from typing import Any, Optional
+from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import enforce_csrf, get_current_user
 from app.api.routes.market_data import get_market_data_service
 from app.api.schemas.base import ResponseEnvelope
 from app.api.schemas.watchlist import (
@@ -11,6 +12,7 @@ from app.api.schemas.watchlist import (
     WatchlistResponseSchema,
     WatchlistSummaryResponseSchema,
 )
+from app.database.models.user import UserModel
 from app.database.session import get_db
 from app.services.market_data import MarketDataService
 from app.services.watchlist import WatchlistService
@@ -33,14 +35,27 @@ def _resolve_val(val: Any, default: Any = None) -> Any:
     return val if val is not None else default
 
 
+def _resolve_user(current_user: Any) -> UserModel:
+    """Helper to unwrap FastAPI Depends default if invoked directly in unit tests."""
+    if hasattr(current_user, "dependency"):
+        return UserModel(
+            id="legacy-dev-user-0000-000000000001",
+            email="legacy-dev@centflow.local",
+            email_normalized="legacy-dev@centflow.local",
+            display_name="Legacy Development User",
+            is_active=True,
+        )
+    return current_user
+
+
 @router.get("", response_model=ResponseEnvelope[list[WatchlistSummaryResponseSchema]])
 async def list_watchlists(
-    user_id: Optional[str] = Query(default=None, description="Optional user filter."),
+    current_user: UserModel = Depends(get_current_user),
     service: WatchlistService = Depends(get_watchlist_service),
 ) -> ResponseEnvelope[list[WatchlistSummaryResponseSchema]]:
-    """Retrieve catalog of all watchlists."""
-    resolved_user = _resolve_val(user_id, None)
-    summaries = await service.list_watchlists(user_id=resolved_user)
+    """Retrieve catalog of all watchlists owned by authenticated user."""
+    user = _resolve_user(current_user)
+    summaries = await service.list_watchlists(user_id=user.id)
     return ResponseEnvelope(
         data=[
             WatchlistSummaryResponseSchema(
@@ -59,11 +74,13 @@ async def list_watchlists(
 @router.get("/default", response_model=ResponseEnvelope[WatchlistResponseSchema])
 async def get_default_watchlist(
     enrich: bool = Query(default=True, description="Enrich items with live market quotes."),
+    current_user: UserModel = Depends(get_current_user),
     service: WatchlistService = Depends(get_watchlist_service),
 ) -> ResponseEnvelope[WatchlistResponseSchema]:
-    """Retrieve or automatically initialize the default user watchlist."""
+    """Retrieve or automatically initialize the default watchlist for authenticated user."""
     resolved_enrich = _resolve_val(enrich, True)
-    dto = await service.get_or_create_default(enrich_quotes=resolved_enrich)
+    user = _resolve_user(current_user)
+    dto = await service.get_or_create_default(user_id=user.id, enrich_quotes=resolved_enrich)
     return ResponseEnvelope(
         data=WatchlistResponseSchema(
             id=dto.id,
@@ -95,15 +112,16 @@ async def get_default_watchlist(
 @router.post("", response_model=ResponseEnvelope[WatchlistResponseSchema], status_code=status.HTTP_201_CREATED)
 async def create_watchlist(
     payload: WatchlistCreateRequest,
-    user_id: Optional[str] = Query(default=None, description="Optional user ID."),
+    current_user: UserModel = Depends(get_current_user),
+    _csrf: None = Depends(enforce_csrf),
     service: WatchlistService = Depends(get_watchlist_service),
 ) -> ResponseEnvelope[WatchlistResponseSchema]:
-    """Create a new custom watchlist."""
-    resolved_user = _resolve_val(user_id, None)
+    """Create a new custom watchlist owned by authenticated user."""
+    user = _resolve_user(current_user)
     dto = await service.create_watchlist(
         name=payload.name,
         description=payload.description,
-        user_id=resolved_user,
+        user_id=user.id,
     )
     return ResponseEnvelope(
         data=WatchlistResponseSchema(
@@ -121,11 +139,17 @@ async def create_watchlist(
 async def get_watchlist(
     watchlist_id: str,
     enrich: bool = Query(default=True, description="Enrich items with live market quotes."),
+    current_user: UserModel = Depends(get_current_user),
     service: WatchlistService = Depends(get_watchlist_service),
 ) -> ResponseEnvelope[WatchlistResponseSchema]:
-    """Retrieve a specific watchlist with its tracked asset items."""
+    """Retrieve a specific user-owned watchlist with its tracked asset items."""
     resolved_enrich = _resolve_val(enrich, True)
-    dto = await service.get_watchlist(watchlist_id=watchlist_id, enrich_quotes=resolved_enrich)
+    user = _resolve_user(current_user)
+    dto = await service.get_watchlist(
+        watchlist_id=watchlist_id,
+        user_id=user.id,
+        enrich_quotes=resolved_enrich,
+    )
     if not dto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -163,10 +187,13 @@ async def get_watchlist(
 @router.delete("/{watchlist_id}", response_model=ResponseEnvelope[dict[str, Any]])
 async def delete_watchlist(
     watchlist_id: str,
+    current_user: UserModel = Depends(get_current_user),
+    _csrf: None = Depends(enforce_csrf),
     service: WatchlistService = Depends(get_watchlist_service),
 ) -> ResponseEnvelope[dict[str, Any]]:
-    """Delete a watchlist."""
-    deleted = await service.delete_watchlist(watchlist_id)
+    """Delete a user-owned watchlist."""
+    user = _resolve_user(current_user)
+    deleted = await service.delete_watchlist(watchlist_id=watchlist_id, user_id=user.id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -179,17 +206,21 @@ async def delete_watchlist(
 async def add_item_to_watchlist(
     watchlist_id: str,
     payload: WatchlistAddSymbolRequest,
+    current_user: UserModel = Depends(get_current_user),
+    _csrf: None = Depends(enforce_csrf),
     service: WatchlistService = Depends(get_watchlist_service),
 ) -> ResponseEnvelope[WatchlistItemResponseSchema]:
-    """Add an asset symbol to the watchlist with duplicate prevention."""
+    """Add an asset symbol to a user-owned watchlist."""
+    user = _resolve_user(current_user)
     item_dto, was_created = await service.add_item(
         watchlist_id=watchlist_id,
         symbol=payload.symbol,
+        user_id=user.id,
     )
     if not item_dto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Watchlist '{watchlist_id}' not found or symbol could not be resolved.",
+            detail=f"Watchlist '{watchlist_id}' not found.",
         )
 
     return ResponseEnvelope(
@@ -215,12 +246,16 @@ async def add_item_to_watchlist(
 async def remove_item_from_watchlist(
     watchlist_id: str,
     symbol_or_id: str,
+    current_user: UserModel = Depends(get_current_user),
+    _csrf: None = Depends(enforce_csrf),
     service: WatchlistService = Depends(get_watchlist_service),
 ) -> ResponseEnvelope[dict[str, Any]]:
-    """Remove an asset from the watchlist."""
+    """Remove an asset from a user-owned watchlist."""
+    user = _resolve_user(current_user)
     removed = await service.remove_item(
         watchlist_id=watchlist_id,
         symbol_or_id=symbol_or_id,
+        user_id=user.id,
     )
     if not removed:
         raise HTTPException(

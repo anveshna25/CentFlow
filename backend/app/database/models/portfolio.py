@@ -12,8 +12,9 @@ class PortfolioModel(Base, TimestampMixin):
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
     base_currency = Column(String(3), nullable=False, default="USD")
-    user_id = Column(String(36), nullable=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
+    user = relationship("UserModel", back_populates="portfolios")
     positions = relationship("PositionModel", back_populates="portfolio", cascade="all, delete-orphan")
 
 

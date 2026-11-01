@@ -25,8 +25,8 @@ class WatchlistRepository(BaseRepository[WatchlistModel]):
             stmt = stmt.where(WatchlistModel.user_id == user_id)
         return self.db.scalars(stmt).unique().all()
 
-    def get_by_id_with_items(self, watchlist_id: str) -> Optional[WatchlistModel]:
-        """Retrieve a watchlist along with its associated instruments."""
+    def get_by_id_with_items(self, watchlist_id: str, user_id: Optional[str] = None) -> Optional[WatchlistModel]:
+        """Retrieve a watchlist along with its associated instruments, scoped to user if provided."""
         stmt = (
             select(WatchlistModel)
             .options(
@@ -34,6 +34,8 @@ class WatchlistRepository(BaseRepository[WatchlistModel]):
             )
             .where(WatchlistModel.id == watchlist_id)
         )
+        if user_id:
+            stmt = stmt.where(WatchlistModel.user_id == user_id)
         return self.db.scalars(stmt).unique().first()
 
     def get_or_create_default(
@@ -42,7 +44,7 @@ class WatchlistRepository(BaseRepository[WatchlistModel]):
         description: str = "Default asset watchlist",
         user_id: Optional[str] = None,
     ) -> WatchlistModel:
-        """Fetch the first active watchlist or create a default one if none exist."""
+        """Fetch the first active watchlist for user or create a default one if none exist."""
         stmt = select(WatchlistModel).order_by(WatchlistModel.created_at.asc())
         if user_id:
             stmt = stmt.where(WatchlistModel.user_id == user_id)
@@ -67,7 +69,6 @@ class WatchlistRepository(BaseRepository[WatchlistModel]):
         Returns:
             tuple[WatchlistInstrumentModel, bool]: (item, was_created)
         """
-        # Check for existing association (duplicate check)
         stmt = select(WatchlistInstrumentModel).where(
             WatchlistInstrumentModel.watchlist_id == watchlist_id,
             WatchlistInstrumentModel.instrument_id == instrument_id,
@@ -76,7 +77,6 @@ class WatchlistRepository(BaseRepository[WatchlistModel]):
         if existing:
             return existing, False
 
-        # Determine next display order
         order_stmt = select(func.count(WatchlistInstrumentModel.id)).where(
             WatchlistInstrumentModel.watchlist_id == watchlist_id
         )

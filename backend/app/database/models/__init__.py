@@ -6,6 +6,7 @@ from app.database.models.instrument import InstrumentModel
 from app.database.models.price import PriceModel
 from app.database.models.watchlist import WatchlistModel, WatchlistInstrumentModel
 from app.database.models.portfolio import PortfolioModel, PositionModel
+from app.database.models.user import UserModel, UserIdentityModel, UserSessionModel, EmailTokenModel
 
 __all__ = [
     "Base",
@@ -20,4 +21,8 @@ __all__ = [
     "WatchlistInstrumentModel",
     "PortfolioModel",
     "PositionModel",
+    "UserModel",
+    "UserIdentityModel",
+    "UserSessionModel",
+    "EmailTokenModel",
 ]
