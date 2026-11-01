@@ -69,7 +69,9 @@ export function PriceChart({
   // Process and sort bars chronologically
   const sortedBars = useMemo(() => {
     if (!data || data.length === 0) return []
-    return [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    return [...data]
+      .filter((b) => b && (b.close != null || b.price != null || b.high != null))
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
   }, [data])
 
   // Price & Volume ranges
@@ -450,6 +452,8 @@ export function PriceChart({
               <button
                 key={tf}
                 id={`${id}-tf-${tf.toLowerCase()}`}
+                data-active={timeframe === tf}
+                aria-pressed={timeframe === tf}
                 onClick={() => onTimeframeChange && onTimeframeChange(tf)}
                 style={{
                   padding: '4px 10px',
