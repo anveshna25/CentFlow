@@ -5,7 +5,7 @@ import { TechnicalPostureBadge } from '../components/analytics'
 import { AssetDetailModal } from '../components/market/AssetDetailModal'
 import { useNavigation } from '../state/NavigationContext'
 import { PAGES } from '../state/pages'
-import { getQuote, getHistoricalBars, ingestQuote, backfillHistoricalBars } from '../api/marketData'
+import { getQuote, getQuotes, getHistoricalBars, ingestQuote, backfillHistoricalBars } from '../api/marketData'
 import { getAnalyticsSummary, getIndicatorSeries, getReturnsAnalysis } from '../api/analytics'
 import {
   getWatchlists,
@@ -139,21 +139,24 @@ export function WatchlistsPage() {
 
     const enrichItems = async () => {
       const symbols = activeWatchlist.items.map((item) => item.symbol)
-      const quotePromises = symbols.map((sym) => getQuote(sym).catch(() => null))
-      const intelPromises = symbols.map((sym) =>
-        getAnalyticsSummary(sym, 365, '1d').catch(() => null)
-      )
-
-      const [quoteResList, intelResList] = await Promise.all([
-        Promise.all(quotePromises),
-        Promise.all(intelPromises),
+      const [quotesRes, intelResList] = await Promise.all([
+        getQuotes(symbols).catch(() => null),
+        Promise.all(symbols.map((sym) => getAnalyticsSummary(sym, 365, '1d').catch(() => null))),
       ])
 
       if (!isCancelled) {
         const newQuotes = {}
         const newIntel = {}
+        if (quotesRes?.data) {
+          if (Array.isArray(quotesRes.data)) {
+            quotesRes.data.forEach((q) => {
+              if (q?.symbol) newQuotes[q.symbol] = q
+            })
+          } else if (typeof quotesRes.data === 'object') {
+            Object.assign(newQuotes, quotesRes.data)
+          }
+        }
         symbols.forEach((sym, idx) => {
-          if (quoteResList[idx]?.data) newQuotes[sym] = quoteResList[idx].data
           if (intelResList[idx]?.data) newIntel[sym] = intelResList[idx].data
         })
         setQuotesMap((prev) => ({ ...prev, ...newQuotes }))
@@ -720,9 +723,14 @@ export function WatchlistsPage() {
           title={activeWatchlist.name}
           subtitle={activeWatchlist.description || `${activeWatchlist.items.length} Tracked Instruments`}
           action={
-            <Badge variant="neutral" size="sm">
-              {activeWatchlist.items.length} Assets
-            </Badge>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Badge variant="neutral" size="sm">
+                {activeWatchlist.items.length} Assets
+              </Badge>
+              <Badge variant="brand" size="sm">
+                Live Quotes Active
+              </Badge>
+            </div>
           }
         >
           <div style={{ overflowX: 'auto', marginTop: 'var(--cf-space-2)' }}>
@@ -799,7 +807,14 @@ export function WatchlistsPage() {
                       </td>
 
                       <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--cf-text-primary)' }}>
-                        {formatPrice(displayPrice, item.currency)}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                          <span>{formatPrice(displayPrice, item.currency)}</span>
+                          {quote?.is_stale && (
+                            <span style={{ fontSize: '10px', color: 'var(--cf-warning)', display: 'inline-flex', alignItems: 'center', gap: '2px' }} title="Market quote is cached or stale">
+                              ⚠️ Stale
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td style={{ padding: '14px 16px', textAlign: 'right' }}>
