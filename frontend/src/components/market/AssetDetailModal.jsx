@@ -55,7 +55,7 @@ export function AssetDetailModal({
         .catch(() => null)
     }
     if (!returnsAnalysis && instrument?.symbol) {
-      getReturnsAnalysis(instrument.symbol, 365, '1d', 252)
+      getReturnsAnalysis(instrument.symbol, 365, '1d', 252, 'SPY', 0.04)
         .then((res) => {
           if (!isCancelled && res?.data) setFetchedReturns(res.data)
         })

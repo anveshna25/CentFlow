@@ -275,7 +275,7 @@ export function MarketIntelligenceCard({
         </div>
       )}
 
-      {/* Risk & Performance Distribution (if returnsAnalysis is available) */}
+      {/* Risk, Benchmark & Performance Analytics */}
       {returnsAnalysis && (
         <div
           style={{
@@ -311,12 +311,37 @@ export function MarketIntelligenceCard({
               -{Math.abs(Number(returnsAnalysis.drawdown?.max_drawdown_percentage ?? 0)).toFixed(1)}%
             </div>
           </div>
-          <div>
-            <div style={{ fontSize: '10px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>Drawdown State</div>
-            <div style={{ fontSize: '14px', fontWeight: 600, color: returnsAnalysis.drawdown?.is_recovered ? 'var(--cf-bullish)' : 'var(--cf-warning)' }}>
-              {returnsAnalysis.drawdown?.is_recovered ? 'Recovered' : 'Underwater'}
+          {returnsAnalysis.risk_adjusted?.sharpe_ratio !== undefined && (
+            <div>
+              <div style={{ fontSize: '10px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>Sharpe Ratio</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--cf-brand-cyan)' }}>
+                {Number(returnsAnalysis.risk_adjusted.sharpe_ratio).toFixed(2)}
+              </div>
             </div>
-          </div>
+          )}
+          {returnsAnalysis.benchmark_metrics?.beta !== undefined && (
+            <div>
+              <div style={{ fontSize: '10px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>Beta (vs SPY)</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--cf-text-primary)' }}>
+                {Number(returnsAnalysis.benchmark_metrics.beta).toFixed(2)}
+              </div>
+            </div>
+          )}
+          {returnsAnalysis.benchmark_metrics?.alpha !== undefined && (
+            <div>
+              <div style={{ fontSize: '10px', color: 'var(--cf-text-muted)', textTransform: 'uppercase' }}>Alpha (vs SPY)</div>
+              <div
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: Number(returnsAnalysis.benchmark_metrics.alpha) >= 0 ? 'var(--cf-bullish)' : 'var(--cf-bearish)',
+                }}
+              >
+                {Number(returnsAnalysis.benchmark_metrics.alpha) >= 0 ? '+' : ''}
+                {(Number(returnsAnalysis.benchmark_metrics.alpha) * 100).toFixed(2)}%
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Card>
