@@ -1,16 +1,26 @@
 from fastapi import APIRouter, Depends, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+from app.api.deps import enforce_csrf, get_current_user
 from app.api.schemas.base import ResponseEnvelope
 from app.api.schemas.portfolio import (
     PortfolioCreateRequest,
     PortfolioResponse,
     PositionCreateRequest,
 )
+from app.database.models.user import UserModel
 from app.database.session import get_db
 from app.services.market_data import MarketDataService
 from app.services.portfolio import PortfolioService
 
 router = APIRouter(prefix="/portfolios", tags=["portfolios"])
+
+
+class MessageResponse(BaseModel):
+    """Generic status response payload."""
+
+    message: str
 
 
 def get_market_data_service() -> MarketDataService:
@@ -28,41 +38,59 @@ def get_portfolio_service(
 
 @router.get("", response_model=ResponseEnvelope[list[PortfolioResponse]])
 async def list_portfolios(
+    current_user: UserModel = Depends(get_current_user),
     service: PortfolioService = Depends(get_portfolio_service),
 ) -> ResponseEnvelope[list[PortfolioResponse]]:
-    """List all portfolios with aggregate valuations, cost basis, and unrealized gain/loss."""
-    portfolios = await service.list_portfolios()
+    """List all portfolios owned by the authenticated user with live valuations."""
+    portfolios = await service.list_portfolios(user_id=current_user.id)
     return ResponseEnvelope(data=portfolios)
 
 
 @router.post("", response_model=ResponseEnvelope[PortfolioResponse], status_code=status.HTTP_201_CREATED)
 async def create_portfolio(
     request: PortfolioCreateRequest,
+    current_user: UserModel = Depends(get_current_user),
+    _csrf: None = Depends(enforce_csrf),
     service: PortfolioService = Depends(get_portfolio_service),
 ) -> ResponseEnvelope[PortfolioResponse]:
-    """Create a new investment portfolio."""
-    created = await service.create_portfolio(request)
+    """Create a new investment portfolio owned by the authenticated user."""
+    created = await service.create_portfolio(request, user_id=current_user.id)
     return ResponseEnvelope(data=created)
 
 
 @router.get("/{portfolio_id}", response_model=ResponseEnvelope[PortfolioResponse])
 async def get_portfolio(
     portfolio_id: str,
+    current_user: UserModel = Depends(get_current_user),
     service: PortfolioService = Depends(get_portfolio_service),
 ) -> ResponseEnvelope[PortfolioResponse]:
-    """Retrieve detailed portfolio metrics, open positions, and valuation breakdown."""
-    portfolio = await service.get_portfolio(portfolio_id)
+    """Retrieve detailed portfolio metrics and valuation breakdown for user-owned portfolio."""
+    portfolio = await service.get_portfolio(portfolio_id, user_id=current_user.id)
     return ResponseEnvelope(data=portfolio)
+
+
+@router.delete("/{portfolio_id}", response_model=ResponseEnvelope[MessageResponse])
+async def delete_portfolio(
+    portfolio_id: str,
+    current_user: UserModel = Depends(get_current_user),
+    _csrf: None = Depends(enforce_csrf),
+    service: PortfolioService = Depends(get_portfolio_service),
+) -> ResponseEnvelope[MessageResponse]:
+    """Delete an investment portfolio owned by the authenticated user."""
+    await service.delete_portfolio(portfolio_id, user_id=current_user.id)
+    return ResponseEnvelope(data=MessageResponse(message="Portfolio deleted successfully."))
 
 
 @router.post("/{portfolio_id}/positions", response_model=ResponseEnvelope[PortfolioResponse], status_code=status.HTTP_201_CREATED)
 async def add_position(
     portfolio_id: str,
     request: PositionCreateRequest,
+    current_user: UserModel = Depends(get_current_user),
+    _csrf: None = Depends(enforce_csrf),
     service: PortfolioService = Depends(get_portfolio_service),
 ) -> ResponseEnvelope[PortfolioResponse]:
-    """Add or accumulate an asset position in a portfolio."""
-    updated = await service.add_position(portfolio_id, request)
+    """Add or accumulate an asset position in a user-owned portfolio."""
+    updated = await service.add_position(portfolio_id, request, user_id=current_user.id)
     return ResponseEnvelope(data=updated)
 
 
@@ -70,8 +98,10 @@ async def add_position(
 async def remove_position(
     portfolio_id: str,
     position_id: str,
+    current_user: UserModel = Depends(get_current_user),
+    _csrf: None = Depends(enforce_csrf),
     service: PortfolioService = Depends(get_portfolio_service),
 ) -> ResponseEnvelope[PortfolioResponse]:
-    """Remove a position from a portfolio and recalculate aggregate valuations."""
-    updated = await service.remove_position(portfolio_id, position_id)
+    """Remove a position from a user-owned portfolio and recalculate aggregate valuations."""
+    updated = await service.remove_position(portfolio_id, position_id, user_id=current_user.id)
     return ResponseEnvelope(data=updated)

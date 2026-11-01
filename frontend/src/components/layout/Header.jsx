@@ -5,6 +5,7 @@ import { highlightMatch } from '../../utils/highlight'
 import { useNavigation } from '../../state/NavigationContext'
 import { PAGES } from '../../state/pages'
 import { useTheme } from '../../state/ThemeContext'
+import { useAuth } from '../../auth/AuthContext'
 
 // Fallback catalog in case backend search is offline or loading
 const FALLBACK_CATALOG = [
@@ -21,6 +22,7 @@ const FALLBACK_CATALOG = [
 export function Header({ onSearch, searchValue = '', onSelectAsset }) {
   const { navigate } = useNavigation()
   const { isDark, toggleTheme } = useTheme()
+  const { user, logout, isAuthenticated } = useAuth()
   const [query, setQuery] = useState(searchValue)
   const [prevSearchValue, setPrevSearchValue] = useState(searchValue)
   const [results, setResults] = useState([])
@@ -534,6 +536,74 @@ export function Header({ onSearch, searchValue = '', onSelectAsset }) {
         <Badge variant="brand" size="sm">
           Core Engine v0.1.0
         </Badge>
+
+        {isAuthenticated && user && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--cf-space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                }}
+              >
+                {(user.display_name || user.email || 'U')[0].toUpperCase()}
+              </div>
+              <span
+                style={{
+                  fontSize: '13px',
+                  color: 'var(--cf-text-primary)',
+                  fontWeight: 500,
+                  maxWidth: '120px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={user.email}
+              >
+                {user.display_name || user.email.split('@')[0]}
+              </span>
+            </div>
+
+            <button
+              id="cf-sign-out-btn"
+              onClick={logout}
+              title="Sign out of CentFlow"
+              aria-label="Sign out"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 10px',
+                borderRadius: 'var(--cf-radius-md)',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: '#f87171',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 500,
+                transition: 'all var(--cf-transition-fast)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'
+                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'
+                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)'
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
+        )}
 
         <button
           id="cf-theme-toggle"

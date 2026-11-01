@@ -105,3 +105,14 @@ Prefer simple, understandable solutions over unnecessary complexity.
 New infrastructure, abstractions, or dependencies should be introduced when they solve an actual project requirement.
 
 CentFlow is being developed incrementally, so the repository structure and conventions should evolve alongside the application rather than anticipating every future requirement.
+
+## 11. Local Environment & Path Privacy Policy
+
+All repository documentation, code, configuration, commit messages, and GitHub-facing artifacts must remain portable and independent of an individual developer's machine:
+
+1. **Path Privacy:** Never publish personal Windows or machine directory paths (such as `C:\Users\...` or personal workspace locations) in GitHub issues, PRs, commit messages, Wiki pages, or documentation.
+2. **Repository-Relative References:** Always use repository-relative paths (e.g., `backend/app/main.py`, `frontend/src/App.jsx`, `docs/architecture.md`).
+3. **Environment Isolation:** Keep local machine environment configuration outside version control. Add machine-specific files, temporary artifacts, credentials, and local databases to `.gitignore`.
+4. **Configuration Templates:** Maintain `.env.example` with safe, generic placeholder values. Never commit actual secrets or user-specific credentials.
+5. **Sanitization:** Do not expose personal usernames, hostnames, machine identifiers, local folder hierarchies, or private environment details in PR bodies, logs, or screenshots.
+6. **Cross-Platform Instructions:** Write generic, portable setup and execution instructions that work across all development environments.

@@ -47,6 +47,18 @@ class Settings:
     api_v1_prefix: str = "/api/v1"
     debug: bool = False
 
+    # Identity, Session & Security Settings
+    session_secret_key: str = "centflow-insecure-dev-session-key-change-in-production"
+    session_cookie_name: str = "centflow_session"
+    session_cookie_ttl_days: int = 7
+    session_cookie_secure: bool = False
+    session_cookie_samesite: str = "lax"
+    csrf_cookie_name: str = "centflow_csrf"
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:5173/auth/google/callback"
+    frontend_base_url: str = "http://localhost:5173"
+
 
 @lru_cache()
 def get_settings() -> Settings:
@@ -71,6 +83,12 @@ def get_settings() -> Settings:
     cb_enabled_env = os.getenv("CIRCUIT_BREAKER_ENABLED", "true").lower()
     cb_enabled = cb_enabled_env in ("1", "true", "yes", "on")
 
+    session_secure_env = os.getenv("SESSION_COOKIE_SECURE")
+    if session_secure_env is not None:
+        session_secure = session_secure_env.lower() in ("1", "true", "yes", "on")
+    else:
+        session_secure = (env == "production")
+
     return Settings(
         app_name=os.getenv("APP_NAME", "CentFlow"),
         app_env=env,
@@ -94,4 +112,14 @@ def get_settings() -> Settings:
         cors_origins=cors_origins,
         api_v1_prefix=os.getenv("API_V1_PREFIX", "/api/v1"),
         debug=(env == "development"),
+        session_secret_key=os.getenv("SESSION_SECRET_KEY", "centflow-insecure-dev-session-key-change-in-production"),
+        session_cookie_name=os.getenv("SESSION_COOKIE_NAME", "centflow_session"),
+        session_cookie_ttl_days=int(os.getenv("SESSION_COOKIE_TTL_DAYS", "7")),
+        session_cookie_secure=session_secure,
+        session_cookie_samesite=os.getenv("SESSION_COOKIE_SAMESITE", "lax").lower(),
+        csrf_cookie_name=os.getenv("CSRF_COOKIE_NAME", "centflow_csrf"),
+        google_client_id=os.getenv("GOOGLE_CLIENT_ID", ""),
+        google_client_secret=os.getenv("GOOGLE_CLIENT_SECRET", ""),
+        google_redirect_uri=os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5173/auth/google/callback"),
+        frontend_base_url=os.getenv("FRONTEND_BASE_URL", "http://localhost:5173"),
     )

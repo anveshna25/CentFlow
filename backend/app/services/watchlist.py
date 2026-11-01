@@ -1,10 +1,12 @@
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-import logging
-from typing import Any, Optional
+from typing import Optional
 from sqlalchemy.orm import Session
 
+from app.core.errors import NotFoundError
+from app.database.models.watchlist import WatchlistModel
 from app.providers.base import ProviderInstrument
 from app.repositories.instrument import InstrumentRepository
 from app.repositories.watchlist import WatchlistRepository
@@ -12,10 +14,12 @@ from app.services.market_data import MarketDataService
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_LEGACY_USER_ID = "legacy-dev-user-0000-000000000001"
+
 
 @dataclass
 class WatchlistItemDTO:
-    """Enriched watchlist item with current market quote observations."""
+    """Enriched data transfer representation of an instrument within a watchlist."""
 
     id: str
     instrument_id: str
@@ -69,11 +73,11 @@ class WatchlistService:
         self.market_data_service = market_data_service or MarketDataService()
 
     async def list_watchlists(self, user_id: Optional[str] = None) -> list[WatchlistSummaryDTO]:
-        """List all watchlists with summary symbols and item counts."""
-        watchlists = self.watchlist_repo.list_watchlists(user_id=user_id)
+        """List all watchlists scoped to user with summary symbols."""
+        uid = user_id or DEFAULT_LEGACY_USER_ID
+        watchlists = self.watchlist_repo.list_watchlists(user_id=uid)
         if not watchlists:
-            # Ensure at least a default watchlist exists
-            default_wl = self.watchlist_repo.get_or_create_default(user_id=user_id)
+            default_wl = self.watchlist_repo.get_or_create_default(user_id=uid)
             watchlists = [default_wl]
 
         summaries: list[WatchlistSummaryDTO] = []
@@ -98,10 +102,11 @@ class WatchlistService:
     async def get_watchlist(
         self,
         watchlist_id: str,
+        user_id: Optional[str] = None,
         enrich_quotes: bool = True,
     ) -> Optional[WatchlistDTO]:
-        """Retrieve a specific watchlist, enriching each item with current market prices."""
-        wl = self.watchlist_repo.get_by_id_with_items(watchlist_id)
+        """Retrieve a specific user-owned watchlist, enriching items with live market quotes."""
+        wl = self.watchlist_repo.get_by_id_with_items(watchlist_id, user_id=user_id)
         if not wl:
             return None
 
@@ -152,9 +157,10 @@ class WatchlistService:
         user_id: Optional[str] = None,
         enrich_quotes: bool = True,
     ) -> WatchlistDTO:
-        """Fetch or create the default watchlist and return enriched details."""
-        default_wl = self.watchlist_repo.get_or_create_default(user_id=user_id)
-        res = await self.get_watchlist(default_wl.id, enrich_quotes=enrich_quotes)
+        """Fetch or create the default watchlist for user and return enriched details."""
+        uid = user_id or DEFAULT_LEGACY_USER_ID
+        default_wl = self.watchlist_repo.get_or_create_default(user_id=uid)
+        res = await self.get_watchlist(default_wl.id, user_id=uid, enrich_quotes=enrich_quotes)
         if res is not None:
             return res
         return WatchlistDTO(
@@ -169,17 +175,16 @@ class WatchlistService:
     async def create_watchlist(
         self,
         name: str,
-        description: Optional[str] = None,
         user_id: Optional[str] = None,
+        description: Optional[str] = None,
     ) -> WatchlistDTO:
-        """Create a new watchlist."""
+        """Create a new user-owned watchlist."""
+        uid = user_id or DEFAULT_LEGACY_USER_ID
         clean_name = name.strip()
-        from app.database.models.watchlist import WatchlistModel
-
         wl = WatchlistModel(
             name=clean_name,
             description=description.strip() if description else None,
-            user_id=user_id,
+            user_id=uid,
         )
         created = self.watchlist_repo.create(wl)
         return WatchlistDTO(
@@ -191,9 +196,9 @@ class WatchlistService:
             created_at=created.created_at,
         )
 
-    async def delete_watchlist(self, watchlist_id: str) -> bool:
-        """Delete a watchlist."""
-        wl = self.watchlist_repo.get_by_id(watchlist_id)
+    async def delete_watchlist(self, watchlist_id: str, user_id: Optional[str] = None) -> bool:
+        """Delete a user-owned watchlist."""
+        wl = self.watchlist_repo.get_by_id_with_items(watchlist_id, user_id=user_id)
         if not wl:
             return False
         self.watchlist_repo.delete(wl)
@@ -203,13 +208,10 @@ class WatchlistService:
         self,
         watchlist_id: str,
         symbol: str,
+        user_id: Optional[str] = None,
     ) -> tuple[Optional[WatchlistItemDTO], bool]:
-        """Add an asset to a watchlist by ticker symbol with duplicate prevention.
-
-        Returns:
-            tuple[Optional[WatchlistItemDTO], bool]: (item_dto, was_created)
-        """
-        wl = self.watchlist_repo.get_by_id(watchlist_id)
+        """Add an asset to a user-owned watchlist by ticker symbol."""
+        wl = self.watchlist_repo.get_by_id_with_items(watchlist_id, user_id=user_id)
         if not wl:
             return None, False
 
@@ -218,7 +220,6 @@ class WatchlistService:
         # 1. Look up or upsert instrument
         instrument = self.instrument_repo.get_by_symbol(clean_symbol)
         if not instrument:
-            # Query market data provider to resolve asset metadata
             try:
                 results = await self.market_data_service.search_instruments(clean_symbol)
                 matched = next((p for p in results if p.symbol.upper() == clean_symbol), None)
@@ -235,7 +236,6 @@ class WatchlistService:
                     instrument = self.instrument_repo.get_or_create_from_provider(p_inst)
             except Exception as ex:
                 logger.error("Failed to resolve symbol %s for watchlist: %s", clean_symbol, ex)
-                # Fallback to local instrument creation
                 p_inst = ProviderInstrument(
                     symbol=clean_symbol,
                     name=clean_symbol,
@@ -276,11 +276,14 @@ class WatchlistService:
         self,
         watchlist_id: str,
         symbol_or_id: str,
+        user_id: Optional[str] = None,
     ) -> bool:
-        """Remove an item from the watchlist by symbol or instrument_id."""
-        clean_target = symbol_or_id.strip()
+        """Remove an item from a user-owned watchlist."""
+        wl = self.watchlist_repo.get_by_id_with_items(watchlist_id, user_id=user_id)
+        if not wl:
+            return False
 
-        # Try to resolve instrument by symbol
+        clean_target = symbol_or_id.strip()
         instrument = self.instrument_repo.get_by_symbol(clean_target.upper())
         instrument_id = instrument.id if instrument else clean_target
 

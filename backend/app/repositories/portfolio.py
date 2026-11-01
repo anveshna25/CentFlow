@@ -27,7 +27,7 @@ class PortfolioRepository(BaseRepository[PortfolioModel]):
             stmt = stmt.where(PortfolioModel.user_id == user_id)
         return self.db.scalars(stmt).unique().all()
 
-    def get_with_positions(self, portfolio_id: str) -> Optional[PortfolioModel]:
+    def get_with_positions(self, portfolio_id: str, user_id: Optional[str] = None) -> Optional[PortfolioModel]:
         """Fetch a single portfolio with eager-loaded positions and instrument relations."""
         stmt = (
             select(PortfolioModel)
@@ -36,7 +36,18 @@ class PortfolioRepository(BaseRepository[PortfolioModel]):
                 joinedload(PortfolioModel.positions).joinedload(PositionModel.instrument)
             )
         )
+        if user_id:
+            stmt = stmt.where(PortfolioModel.user_id == user_id)
         return self.db.scalars(stmt).unique().first()
+
+    def delete_portfolio(self, portfolio_id: str, user_id: Optional[str] = None) -> bool:
+        """Delete a portfolio owned by user."""
+        pf = self.get_with_positions(portfolio_id, user_id=user_id)
+        if not pf:
+            return False
+        self.db.delete(pf)
+        self.db.commit()
+        return True
 
     def add_or_update_position(
         self,

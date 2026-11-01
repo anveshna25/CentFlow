@@ -5,9 +5,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.deps import enforce_csrf, get_current_user
 from app.api.schemas.portfolio import PortfolioCreateRequest, PositionCreateRequest
 from app.core.errors import NotFoundError, ValidationError
-from app.database.models import Base
+from app.database.models import Base, UserModel
 from app.database.session import get_db
 from app.main import create_app
 from app.repositories.portfolio import PortfolioRepository
@@ -29,6 +30,18 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
         self.Session = sessionmaker(bind=self.engine, autocommit=False, autoflush=False)
         self.db = self.Session()
 
+        # Seed authenticated user
+        self.user = UserModel(
+            email="portfolio.tester@centflow.com",
+            email_normalized="portfolio.tester@centflow.com",
+            display_name="Portfolio Tester",
+            password_hash="$argon2id$mock",
+            is_active=True,
+        )
+        self.db.add(self.user)
+        self.db.commit()
+        self.user_id = self.user.id
+
         self.market_data_service = MarketDataService(enable_cache=False)
         self.portfolio_repo = PortfolioRepository(self.db)
         self.portfolio_service = PortfolioService(
@@ -36,7 +49,7 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
             market_data_service=self.market_data_service,
         )
 
-        # Setup FastAPI TestClient with DB dependency override
+        # Setup FastAPI TestClient with DB and Auth dependency overrides
         self.app = create_app()
 
         def override_get_db():
@@ -47,16 +60,19 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
                 db.close()
 
         self.app.dependency_overrides[get_db] = override_get_db
+        self.app.dependency_overrides[get_current_user] = lambda: self.user
+        self.app.dependency_overrides[enforce_csrf] = lambda: None
         self.client = TestClient(self.app)
 
     def tearDown(self):
+        self.app.dependency_overrides.clear()
         self.db.close()
         Base.metadata.drop_all(bind=self.engine)
         self.engine.dispose()
 
     async def test_list_portfolios_creates_default_when_empty(self):
         """Listing portfolios when none exist should automatically provision a default portfolio."""
-        portfolios = await self.portfolio_service.list_portfolios()
+        portfolios = await self.portfolio_service.list_portfolios(user_id=self.user_id)
         self.assertEqual(len(portfolios), 1)
         self.assertEqual(portfolios[0].name, "Main Multi-Asset")
         self.assertEqual(portfolios[0].total_valuation, Decimal("0.00"))
@@ -69,12 +85,12 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
             description="High-conviction equity and crypto holdings",
             base_currency="USD",
         )
-        created = await self.portfolio_service.create_portfolio(req)
+        created = await self.portfolio_service.create_portfolio(req, user_id=self.user_id)
         self.assertIsNotNone(created.id)
         self.assertEqual(created.name, "Macro Growth Fund")
         self.assertEqual(created.base_currency, "USD")
 
-        fetched = await self.portfolio_service.get_portfolio(created.id)
+        fetched = await self.portfolio_service.get_portfolio(created.id, user_id=self.user_id)
         self.assertEqual(fetched.id, created.id)
         self.assertEqual(fetched.name, "Macro Growth Fund")
 
@@ -82,18 +98,17 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
         """Portfolio with empty/whitespace name should fail validation."""
         req = PortfolioCreateRequest(name="   ", description="Invalid")
         with self.assertRaises(ValidationError):
-            await self.portfolio_service.create_portfolio(req)
+            await self.portfolio_service.create_portfolio(req, user_id=self.user_id)
 
     async def test_get_unknown_portfolio_raises_not_found(self):
         """Looking up a nonexistent portfolio should raise NotFoundError."""
         with self.assertRaises(NotFoundError):
-            await self.portfolio_service.get_portfolio("nonexistent-portfolio-id")
+            await self.portfolio_service.get_portfolio("nonexistent-portfolio-id", user_id=self.user_id)
 
     async def test_add_and_accumulate_position(self):
         """Adding a position and accumulating additional units with weighted average price calculation."""
-        # Provision a portfolio
         pf_req = PortfolioCreateRequest(name="Tech & Crypto", base_currency="USD")
-        pf = await self.portfolio_service.create_portfolio(pf_req)
+        pf = await self.portfolio_service.create_portfolio(pf_req, user_id=self.user_id)
 
         # 1. Add first position in AAPL: 10 units @ $150.00
         pos1 = PositionCreateRequest(
@@ -102,7 +117,7 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
             average_price=Decimal("150.00"),
             currency="USD",
         )
-        updated1 = await self.portfolio_service.add_position(pf.id, pos1)
+        updated1 = await self.portfolio_service.add_position(pf.id, pos1, user_id=self.user_id)
         self.assertEqual(updated1.positions_count, 1)
         holding1 = updated1.positions[0]
         self.assertEqual(holding1.symbol, "AAPL")
@@ -120,42 +135,40 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
             average_price=Decimal("170.00"),
             currency="USD",
         )
-        updated2 = await self.portfolio_service.add_position(pf.id, pos2)
+        updated2 = await self.portfolio_service.add_position(pf.id, pos2, user_id=self.user_id)
         self.assertEqual(updated2.positions_count, 1)
         holding2 = updated2.positions[0]
         self.assertEqual(holding2.quantity, Decimal("20"))
         self.assertEqual(holding2.average_price, Decimal("160.000000"))
         self.assertEqual(holding2.cost_basis, Decimal("3200.00"))
-        # 20 * 185.50 = 3710.00
         self.assertEqual(holding2.market_value, Decimal("3710.00"))
         self.assertEqual(holding2.unrealized_pnl, Decimal("510.00"))
 
     async def test_remove_position(self):
         """Removing an existing position updates aggregate portfolio valuations."""
-        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Hedging"))
+        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Hedging"), user_id=self.user_id)
         pos_req = PositionCreateRequest(symbol="SPY", quantity=Decimal("5"), average_price=Decimal("500.00"))
-        updated = await self.portfolio_service.add_position(pf.id, pos_req)
+        updated = await self.portfolio_service.add_position(pf.id, pos_req, user_id=self.user_id)
         self.assertEqual(updated.positions_count, 1)
         pos_id = updated.positions[0].id
 
-        after_delete = await self.portfolio_service.remove_position(pf.id, pos_id)
+        after_delete = await self.portfolio_service.remove_position(pf.id, pos_id, user_id=self.user_id)
         self.assertEqual(after_delete.positions_count, 0)
         self.assertEqual(after_delete.total_valuation, Decimal("0.00"))
 
     async def test_position_live_market_data_valuations_and_daily_pnl(self):
         """Validates that live quotes properly update market_value, daily_pnl, and daily_pnl_percent."""
-        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Alpha Fund"))
+        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Alpha Fund"), user_id=self.user_id)
         pos_req = PositionCreateRequest(
             symbol="AAPL",
             quantity=Decimal("10"),
             average_price=Decimal("150.00"),
             currency="USD",
         )
-        updated = await self.portfolio_service.add_position(pf.id, pos_req)
+        updated = await self.portfolio_service.add_position(pf.id, pos_req, user_id=self.user_id)
         self.assertEqual(updated.positions_count, 1)
 
         holding = updated.positions[0]
-        # In mock provider: AAPL price = 185.50, previous_close = 183.90, change = +1.60 (+0.87%)
         self.assertEqual(holding.current_price, Decimal("185.500000"))
         self.assertEqual(holding.market_value, Decimal("1855.00"))
         self.assertEqual(holding.cost_basis, Decimal("1500.00"))
@@ -173,14 +186,14 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
 
     async def test_fallback_to_entry_price_when_symbol_unquoted(self):
         """Positions with unquoted or offline symbols fall back to entry price with is_stale=True."""
-        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Custom Assets"))
+        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Custom Assets"), user_id=self.user_id)
         pos_req = PositionCreateRequest(
             symbol="CUSTOM_ASSET_XYZ",
             quantity=Decimal("5"),
             average_price=Decimal("100.00"),
             currency="USD",
         )
-        updated = await self.portfolio_service.add_position(pf.id, pos_req)
+        updated = await self.portfolio_service.add_position(pf.id, pos_req, user_id=self.user_id)
         holding = updated.positions[0]
         self.assertEqual(holding.current_price, Decimal("100.000000"))
         self.assertEqual(holding.market_value, Decimal("500.00"))
@@ -193,16 +206,18 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
 
     async def test_multi_asset_portfolio_batch_valuation_consistency(self):
         """Batch quote aggregation ensures numerical consistency across diverse asset holdings."""
-        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Balanced Multi-Asset"))
+        pf = await self.portfolio_service.create_portfolio(PortfolioCreateRequest(name="Balanced Multi-Asset"), user_id=self.user_id)
         await self.portfolio_service.add_position(
             pf.id,
             PositionCreateRequest(symbol="AAPL", quantity=Decimal("10"), average_price=Decimal("150.00")),
+            user_id=self.user_id,
         )
         await self.portfolio_service.add_position(
             pf.id,
             PositionCreateRequest(symbol="MSFT", quantity=Decimal("5"), average_price=Decimal("400.00")),
+            user_id=self.user_id,
         )
-        refreshed = await self.portfolio_service.get_portfolio(pf.id)
+        refreshed = await self.portfolio_service.get_portfolio(pf.id, user_id=self.user_id)
         self.assertEqual(refreshed.positions_count, 2)
 
         expected_valuation = sum(p.market_value for p in refreshed.positions)
@@ -239,7 +254,6 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
         position = pf_data["positions"][0]
         self.assertEqual(position["symbol"], "BTC-USD")
         self.assertEqual(float(position["cost_basis"]), 30000.00)
-        # Mock price is 65,400.00 -> market value = 32,700.00
         self.assertEqual(float(position["market_value"]), 32700.00)
         self.assertEqual(float(position["unrealized_pnl"]), 2700.00)
         self.assertIn("daily_pnl", position)
@@ -262,4 +276,3 @@ class TestPortfolioFoundationAndHoldings(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

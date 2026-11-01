@@ -12,8 +12,9 @@ class WatchlistModel(Base, TimestampMixin):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
-    user_id = Column(String(36), nullable=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
+    user = relationship("UserModel", back_populates="watchlists")
     items = relationship(
         "WatchlistInstrumentModel",
         back_populates="watchlist",
