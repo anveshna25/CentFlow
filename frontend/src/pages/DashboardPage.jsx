@@ -1,6 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
-import { StatWidget } from '../components/market/StatWidget'
-import { Card, Badge, LoadingState, ErrorState } from '../components/common'
+import {
+  Card,
+  Badge,
+  Button,
+  LoadingState,
+  ErrorState,
+  StatWidget,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableHeaderCell,
+  Skeleton,
+} from '../components/common'
 import { useNavigation } from '../state/NavigationContext'
 import { PAGES } from '../state/pages'
 import { getProviderStatus, getQuote } from '../api/marketData'
@@ -151,14 +164,15 @@ export function DashboardPage() {
         />
       )}
 
-      {/* Hero Welcome & Market Pulse Banner */}
+      {/* Hero Welcome & Market Overview Header */}
       <section
         style={{
-          background: 'radial-gradient(100% 100% at 0% 0%, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.05) 50%, transparent 100%), var(--cf-bg-surface-glass)',
+          background: 'var(--cf-bg-surface-elevated)',
           border: '1px solid var(--cf-border)',
+          borderTop: '3px solid var(--cf-brand-primary)',
           borderRadius: 'var(--cf-radius-xl)',
           padding: 'var(--cf-space-6)',
-          backdropFilter: 'blur(16px)',
+          boxShadow: 'var(--cf-shadow-sm)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -167,65 +181,62 @@ export function DashboardPage() {
         }}
       >
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--cf-space-2)', flexWrap: 'wrap' }}>
             <Badge variant="brand" size="sm" id="cf-dashboard-badge">
-              {providerStatus ? `Provider: ${providerStatus.name.toUpperCase()} (Online)` : 'Market Intelligence Overview'}
+              {providerStatus ? `Feed: ${providerStatus.name.toUpperCase()} (Active)` : 'Market Feed Online'}
             </Badge>
             {lastRefreshedAt && (
-              <span style={{ fontSize: '12px', color: 'var(--cf-text-muted)' }}>
+              <span style={{ fontSize: 'var(--cf-font-size-xs)', color: 'var(--cf-text-muted)' }}>
                 Updated: {lastRefreshedAt}
               </span>
             )}
           </div>
-          <h1 style={{ fontSize: '28px', marginTop: 'var(--cf-space-2)', marginBottom: 'var(--cf-space-1)', letterSpacing: '-0.02em' }}>
+          <h1
+            style={{
+              fontFamily: 'var(--cf-font-display)',
+              fontSize: 'var(--cf-font-size-3xl)',
+              fontWeight: 'var(--cf-font-weight-bold)',
+              color: 'var(--cf-text-primary)',
+              marginTop: 'var(--cf-space-2)',
+              marginBottom: 'var(--cf-space-1)',
+              letterSpacing: '-0.02em',
+            }}
+          >
             Market Overview & Global Intelligence
           </h1>
-          <p style={{ color: 'var(--cf-text-secondary)', margin: 0, fontSize: '14px' }}>
+          <p
+            style={{
+              color: 'var(--cf-text-secondary)',
+              margin: 0,
+              fontSize: 'var(--cf-font-size-base)',
+              maxWidth: '720px',
+            }}
+          >
             Multi-asset observation engine, benchmark index tracking, and quantitative factor regimes.
           </p>
         </div>
 
         {/* Action Controls */}
         <div style={{ display: 'flex', gap: 'var(--cf-space-3)', alignItems: 'center' }}>
-          <button
+          <Button
             id="cf-refresh-dashboard-btn"
+            variant="secondary"
+            size="md"
             onClick={() => loadDashboardData(true)}
-            disabled={isRefreshing}
-            style={{
-              background: 'var(--cf-bg-surface-elevated)',
-              border: '1px solid var(--cf-border)',
-              color: 'var(--cf-text-primary)',
-              padding: '10px 16px',
-              borderRadius: 'var(--cf-radius-md)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: isRefreshing ? 'wait' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all var(--cf-transition-fast)',
-            }}
+            isLoading={isRefreshing}
+            iconLeft={<span aria-hidden="true">↻</span>}
           >
-            <span>{isRefreshing ? 'Refreshing...' : '↻ Refresh Quotes'}</span>
-          </button>
-          <button
+            Refresh Quotes
+          </Button>
+          <Button
             id="cf-explore-markets-btn"
+            variant="primary"
+            size="md"
             onClick={() => navigate(PAGES.MARKETS)}
-            style={{
-              background: 'var(--cf-brand-gradient)',
-              color: '#ffffff',
-              border: 'none',
-              padding: '10px 18px',
-              borderRadius: 'var(--cf-radius-md)',
-              fontWeight: 600,
-              fontSize: '13px',
-              boxShadow: 'var(--cf-brand-glow)',
-              cursor: 'pointer',
-              transition: 'opacity var(--cf-transition-fast)',
-            }}
+            iconRight={<span aria-hidden="true">→</span>}
           >
-            Explore Markets →
-          </button>
+            Explore Markets
+          </Button>
         </div>
       </section>
 
@@ -249,13 +260,22 @@ export function DashboardPage() {
           border: '1px solid var(--cf-border)',
           borderRadius: 'var(--cf-radius-lg)',
           padding: 'var(--cf-space-4)',
+          boxShadow: 'var(--cf-shadow-sm)',
         }}
       >
         <div>
-          <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div
+            style={{
+              fontSize: 'var(--cf-font-size-xs)',
+              color: 'var(--cf-text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              fontWeight: 'var(--cf-font-weight-bold)',
+            }}
+          >
             Market Breadth
           </div>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--cf-text-primary)', marginTop: '2px' }}>
+          <div style={{ fontSize: 'var(--cf-font-size-md)', fontWeight: 600, color: 'var(--cf-text-primary)', marginTop: '4px' }}>
             <span style={{ color: 'var(--cf-bullish)' }}>{advancingCount} Advancing</span>
             <span style={{ color: 'var(--cf-text-muted)', margin: '0 6px' }}>/</span>
             <span style={{ color: 'var(--cf-bearish)' }}>{decliningCount} Declining</span>
@@ -263,15 +283,24 @@ export function DashboardPage() {
         </div>
 
         <div>
-          <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div
+            style={{
+              fontSize: 'var(--cf-font-size-xs)',
+              color: 'var(--cf-text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              fontWeight: 'var(--cf-font-weight-bold)',
+            }}
+          >
             Average Benchmark Drift
           </div>
           <div
+            className="cf-num-tabular"
             style={{
-              fontSize: '15px',
+              fontSize: 'var(--cf-font-size-md)',
               fontWeight: 600,
               color: Number(avgChange) >= 0 ? 'var(--cf-bullish)' : 'var(--cf-bearish)',
-              marginTop: '2px',
+              marginTop: '4px',
             }}
           >
             {Number(avgChange) >= 0 ? `+${avgChange}%` : `${avgChange}%`}
@@ -279,19 +308,35 @@ export function DashboardPage() {
         </div>
 
         <div>
-          <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div
+            style={{
+              fontSize: 'var(--cf-font-size-xs)',
+              color: 'var(--cf-text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              fontWeight: 'var(--cf-font-weight-bold)',
+            }}
+          >
             Provider Architecture
           </div>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--cf-brand-cyan)', marginTop: '2px' }}>
+          <div style={{ fontSize: 'var(--cf-font-size-md)', fontWeight: 600, color: 'var(--cf-brand-cyan)', marginTop: '4px' }}>
             {providerStatus?.name ? providerStatus.name.toUpperCase() : 'MOCK'} Engine
           </div>
         </div>
 
         <div>
-          <div style={{ fontSize: '11px', color: 'var(--cf-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div
+            style={{
+              fontSize: 'var(--cf-font-size-xs)',
+              color: 'var(--cf-text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              fontWeight: 'var(--cf-font-weight-bold)',
+            }}
+          >
             Provider Health
           </div>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--cf-bullish)', marginTop: '2px' }}>
+          <div style={{ fontSize: 'var(--cf-font-size-md)', fontWeight: 600, color: 'var(--cf-bullish)', marginTop: '4px' }}>
             ● Healthy & Operational
           </div>
         </div>
@@ -302,7 +347,7 @@ export function DashboardPage() {
         id="cf-dashboard-benchmarks-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
           gap: 'var(--cf-space-4)',
         }}
       >
@@ -312,6 +357,7 @@ export function DashboardPage() {
           value={`$${Number(spyAsset.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           changePercent={spyAsset.changePercent}
           subtitle={`Daily Volume: ${spyAsset.volume} · Click to inspect`}
+          status="live"
           extra={
             <TechnicalPostureBadge
               posture={intelligenceMap['SPY'] || 'BULLISH'}
@@ -328,6 +374,7 @@ export function DashboardPage() {
           value={`$${Number(qqqAsset.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           changePercent={qqqAsset.changePercent}
           subtitle={`Daily Volume: ${qqqAsset.volume} · Click to inspect`}
+          status="live"
           extra={
             <TechnicalPostureBadge
               posture={intelligenceMap['QQQ'] || 'BULLISH'}
@@ -343,7 +390,8 @@ export function DashboardPage() {
           title="Bitcoin USD (BTC-USD)"
           value={`$${Number(btcAsset.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           changePercent={btcAsset.changePercent}
-          subtitle={`Crypto Benchmark · Click to inspect`}
+          subtitle="Crypto Benchmark · Click to inspect"
+          status="live"
           extra={
             <TechnicalPostureBadge
               posture={intelligenceMap['BTC-USD'] || 'BULLISH'}
@@ -359,7 +407,8 @@ export function DashboardPage() {
           title="Ethereum USD (ETH-USD)"
           value={`$${Number(ethAsset.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           changePercent={ethAsset.changePercent}
-          subtitle={`Smart Contract Benchmark · Click to inspect`}
+          subtitle="Smart Contract Benchmark · Click to inspect"
+          status="live"
           extra={
             <TechnicalPostureBadge
               posture={intelligenceMap['ETH-USD'] || 'BULLISH'}
@@ -383,24 +432,18 @@ export function DashboardPage() {
           title="Equity Macro Regime (SPY)"
           subtitle="Broad US market factor posture and trend consensus"
           action={
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => navigate(PAGES.MARKETS, { symbol: 'SPY' })}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--cf-brand-primary)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
             >
               Analyze factors →
-            </button>
+            </Button>
           }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px', color: 'var(--cf-text-secondary)' }}>Trend Posture</span>
+              <span style={{ fontSize: 'var(--cf-font-size-base)', color: 'var(--cf-text-secondary)' }}>Trend Posture</span>
               <TechnicalPostureBadge
                 posture={intelligenceMap['SPY'] || 'BULLISH'}
                 size="sm"
@@ -408,12 +451,12 @@ export function DashboardPage() {
               />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px', color: 'var(--cf-text-secondary)' }}>Quantitative Score</span>
-              <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--cf-brand-cyan)' }}>
+              <span style={{ fontSize: 'var(--cf-font-size-base)', color: 'var(--cf-text-secondary)' }}>Quantitative Score</span>
+              <span style={{ fontWeight: 700, fontSize: 'var(--cf-font-size-md)', color: 'var(--cf-brand-cyan)' }}>
                 {intelligenceMap['SPY']?.composite_score ?? 65} / 100
               </span>
             </div>
-            <div style={{ borderTop: '1px solid var(--cf-border)', paddingTop: 'var(--cf-space-2)', fontSize: '12px', color: 'var(--cf-text-muted)' }}>
+            <div style={{ borderTop: '1px solid var(--cf-border)', paddingTop: 'var(--cf-space-2)', fontSize: 'var(--cf-font-size-sm)', color: 'var(--cf-text-muted)' }}>
               {intelligenceMap['SPY']?.rationales?.[0] || 'Price trading above primary moving average envelopes indicating positive momentum posture.'}
             </div>
           </div>
@@ -425,24 +468,18 @@ export function DashboardPage() {
           title="Digital Asset Regime (BTC-USD)"
           subtitle="Crypto benchmark volatility and momentum posture"
           action={
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => navigate(PAGES.MARKETS, { symbol: 'BTC-USD' })}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--cf-brand-primary)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
             >
               Analyze factors →
-            </button>
+            </Button>
           }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--cf-space-3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px', color: 'var(--cf-text-secondary)' }}>Trend Posture</span>
+              <span style={{ fontSize: 'var(--cf-font-size-base)', color: 'var(--cf-text-secondary)' }}>Trend Posture</span>
               <TechnicalPostureBadge
                 posture={intelligenceMap['BTC-USD'] || 'BULLISH'}
                 size="sm"
@@ -450,12 +487,12 @@ export function DashboardPage() {
               />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px', color: 'var(--cf-text-secondary)' }}>Quantitative Score</span>
-              <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--cf-brand-cyan)' }}>
+              <span style={{ fontSize: 'var(--cf-font-size-base)', color: 'var(--cf-text-secondary)' }}>Quantitative Score</span>
+              <span style={{ fontWeight: 700, fontSize: 'var(--cf-font-size-md)', color: 'var(--cf-brand-cyan)' }}>
                 {intelligenceMap['BTC-USD']?.composite_score ?? 70} / 100
               </span>
             </div>
-            <div style={{ borderTop: '1px solid var(--cf-border)', paddingTop: 'var(--cf-space-2)', fontSize: '12px', color: 'var(--cf-text-muted)' }}>
+            <div style={{ borderTop: '1px solid var(--cf-border)', paddingTop: 'var(--cf-space-2)', fontSize: 'var(--cf-font-size-sm)', color: 'var(--cf-text-muted)' }}>
               {intelligenceMap['BTC-USD']?.rationales?.[0] || 'Decoupled crypto risk asset exhibiting positive momentum and strong RSI consolidation.'}
             </div>
           </div>
@@ -468,114 +505,123 @@ export function DashboardPage() {
         title="Active Benchmark Instruments"
         subtitle="Live prices, daily drift, and volume across key asset classes"
         action={
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 'var(--cf-space-1)',
+              background: 'var(--cf-bg-surface-elevated)',
+              padding: '3px',
+              borderRadius: 'var(--cf-radius-md)',
+              border: '1px solid var(--cf-border)',
+            }}
+          >
             {['all', 'equity', 'crypto', 'etf'].map((cat) => (
-              <button
+              <Button
                 key={cat}
                 id={`dashboard-filter-${cat}`}
+                variant={selectedCategory === cat ? 'primary' : 'ghost'}
+                size="sm"
                 onClick={() => setSelectedCategory(cat)}
                 style={{
-                  padding: '4px 10px',
-                  borderRadius: 'var(--cf-radius-sm)',
-                  fontSize: '12px',
-                  fontWeight: 600,
                   textTransform: 'capitalize',
-                  background: selectedCategory === cat ? 'var(--cf-brand-primary)' : 'transparent',
-                  color: selectedCategory === cat ? '#ffffff' : 'var(--cf-text-secondary)',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'all var(--cf-transition-fast)',
+                  height: '26px',
+                  padding: '0 var(--cf-space-2)',
+                  fontSize: 'var(--cf-font-size-xs)',
                 }}
               >
                 {cat === 'all' ? 'All' : cat}
-              </button>
+              </Button>
             ))}
           </div>
         }
       >
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--cf-border)', color: 'var(--cf-text-muted)' }}>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>INSTRUMENT</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>TYPE</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>EXCHANGE</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>PRICE (USD)</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>24H CHANGE</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>SIGNALS & POSTURE</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>VOLUME</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>ACTION</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAssets.map((asset) => (
-                <tr
+        <Table id="cf-featured-assets-table">
+          <TableHead>
+            <TableRow hoverable={false}>
+              <TableHeaderCell>INSTRUMENT</TableHeaderCell>
+              <TableHeaderCell>TYPE</TableHeaderCell>
+              <TableHeaderCell>EXCHANGE</TableHeaderCell>
+              <TableHeaderCell align="right">PRICE (USD)</TableHeaderCell>
+              <TableHeaderCell align="right">24H CHANGE</TableHeaderCell>
+              <TableHeaderCell align="center">SIGNALS & POSTURE</TableHeaderCell>
+              <TableHeaderCell align="right">VOLUME</TableHeaderCell>
+              <TableHeaderCell align="center">ACTION</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {isLoading && marketAssets.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <TableRow key={`skeleton-${i}`} hoverable={false}>
+                  <TableCell><Skeleton width="90px" height="18px" /></TableCell>
+                  <TableCell><Skeleton width="50px" height="18px" /></TableCell>
+                  <TableCell><Skeleton width="60px" height="18px" /></TableCell>
+                  <TableCell align="right"><Skeleton width="70px" height="18px" /></TableCell>
+                  <TableCell align="right"><Skeleton width="60px" height="18px" /></TableCell>
+                  <TableCell align="center"><Skeleton width="100px" height="18px" /></TableCell>
+                  <TableCell align="right"><Skeleton width="50px" height="18px" /></TableCell>
+                  <TableCell align="center"><Skeleton width="80px" height="24px" /></TableCell>
+                </TableRow>
+              ))
+            ) : (
+              filteredAssets.map((asset) => (
+                <TableRow
                   key={asset.symbol}
                   id={`asset-row-${asset.symbol}`}
                   onClick={() => navigate(PAGES.MARKETS, { symbol: asset.symbol })}
-                  style={{
-                    borderBottom: '1px solid var(--cf-border)',
-                    cursor: 'pointer',
-                    transition: 'background var(--cf-transition-fast)',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--cf-bg-surface-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  hoverable
                 >
-                  <td style={{ padding: '14px 16px' }}>
+                  <TableCell>
                     <div style={{ fontWeight: 600, color: 'var(--cf-brand-cyan)' }}>{asset.symbol}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--cf-text-secondary)' }}>{asset.name}</div>
-                  </td>
-                  <td style={{ padding: '14px 16px' }}>
+                    <div style={{ fontSize: 'var(--cf-font-size-xs)', color: 'var(--cf-text-secondary)' }}>{asset.name}</div>
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={asset.type === 'crypto' ? 'brand' : asset.type === 'etf' ? 'warning' : 'neutral'} size="sm">
                       {asset.type}
                     </Badge>
-                  </td>
-                  <td style={{ padding: '14px 16px', color: 'var(--cf-text-secondary)' }}>{asset.exchange}</td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--cf-text-primary)' }}>
+                  </TableCell>
+                  <TableCell style={{ color: 'var(--cf-text-secondary)' }}>{asset.exchange}</TableCell>
+                  <TableCell align="right" tabular style={{ fontWeight: 600, color: 'var(--cf-text-primary)' }}>
                     ${Number(asset.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                  </TableCell>
+                  <TableCell align="right" tabular>
                     <span style={{ color: asset.isUp ? 'var(--cf-bullish)' : 'var(--cf-bearish)', fontWeight: 600 }}>
                       {asset.change}
                     </span>
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                  </TableCell>
+                  <TableCell align="center">
                     <TechnicalPostureBadge
                       posture={intelligenceMap[asset.symbol]}
                       showScore
                       size="sm"
                       id={`posture-table-${asset.symbol}`}
                     />
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', color: 'var(--cf-text-secondary)' }}>
+                  </TableCell>
+                  <TableCell align="right" tabular style={{ color: 'var(--cf-text-secondary)' }}>
                     {asset.volume}
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                    <button
+                  </TableCell>
+                  <TableCell align="center">
+                    <Button
                       id={`btn-inspect-${asset.symbol}`}
+                      variant="secondary"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation()
                         navigate(PAGES.MARKETS, { symbol: asset.symbol })
                       }}
                       style={{
-                        background: 'rgba(59, 130, 246, 0.12)',
-                        color: 'var(--cf-brand-primary)',
-                        border: '1px solid rgba(59, 130, 246, 0.25)',
-                        borderRadius: 'var(--cf-radius-sm)',
-                        padding: '4px 10px',
+                        height: '26px',
+                        padding: '0 var(--cf-space-2)',
                         fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
                       }}
                     >
                       Inspect & Chart
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </Card>
     </div>
   )
