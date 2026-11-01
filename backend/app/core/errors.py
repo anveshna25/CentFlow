@@ -151,6 +151,28 @@ class ProviderAuthenticationError(ProviderError):
         )
 
 
+class CircuitBreakerOpenError(ProviderUnavailableError):
+    """Raised when calls to an external market data provider are tripped by the circuit breaker."""
+
+    def __init__(self, provider_name: str, reset_timeout_seconds: float):
+        super().__init__(
+            provider_name=provider_name,
+            message=(
+                f"Market data provider '{provider_name}' circuit breaker is OPEN. "
+                f"Failing fast to prevent cascading degradation (cooldown: {int(reset_timeout_seconds)}s)."
+            ),
+        )
+        self.code = "CIRCUIT_BREAKER_OPEN"
+        self.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        self.details = [
+            {
+                "provider": provider_name,
+                "circuit_state": "OPEN",
+                "reset_timeout_seconds": reset_timeout_seconds,
+            }
+        ]
+
+
 class InstrumentNotFoundError(NotFoundError):
     """Raised when a specific financial instrument/symbol is not found by a provider or database."""
 
@@ -172,6 +194,56 @@ class StaleDataError(CentFlowException):
                 "threshold_seconds": threshold_seconds,
             }],
         )
+
+
+def sanitize_provider_error(exc: Exception, provider_name: str) -> CentFlowException:
+    """Sanitize external provider exceptions into clean, uniform ProviderError models.
+
+    Prevents leaking internal stack traces, URLs with tokens/credentials, or raw database
+    queries to API consumers while accurately categorizing the failure mode.
+    """
+    if isinstance(exc, CentFlowException) and not isinstance(exc, ProviderError):
+        return exc
+
+    if isinstance(exc, ProviderError):
+        return exc
+
+    raw_msg = str(exc).lower() if exc else ""
+
+    if any(k in raw_msg for k in ("timeout", "timed out", "deadline exceeded")):
+        return ProviderTimeoutError(
+            provider_name=provider_name,
+            message=f"Request to market data provider '{provider_name}' timed out. Please try again.",
+        )
+
+    if any(k in raw_msg for k in ("429", "rate limit", "too many requests", "quota exceeded")):
+        return ProviderRateLimitError(
+            provider_name=provider_name,
+            message=f"Upstream rate limit reached for provider '{provider_name}'. Please wait before retrying.",
+        )
+
+    if any(k in raw_msg for k in ("401", "403", "unauthorized", "forbidden", "api key", "credentials")):
+        return ProviderAuthenticationError(
+            provider_name=provider_name,
+            message=f"Authentication failed for market data provider '{provider_name}'.",
+        )
+
+    if isinstance(exc, (KeyError, ValueError, TypeError)) or any(k in raw_msg for k in ("json", "decode", "malformed", "keyerror", "valueerror", "syntaxerror")):
+        return ProviderResponseError(
+            provider_name=provider_name,
+            message=f"Received an unexpected or invalid response from provider '{provider_name}'.",
+        )
+
+    if any(k in raw_msg for k in ("connect", "unreachable", "dns", "connection refused", "reset by peer")):
+        return ProviderUnavailableError(
+            provider_name=provider_name,
+            message=f"Market data provider '{provider_name}' is currently unreachable.",
+        )
+
+    return ProviderError(
+        message=f"An error occurred while communicating with market data provider '{provider_name}'.",
+        code="PROVIDER_ERROR",
+    )
 
 
 def _build_error_response(code: str, message: str, details: Optional[list[Any]] = None) -> dict[str, Any]:

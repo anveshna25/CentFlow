@@ -181,6 +181,7 @@ async def get_quote(
             "market_status": quote.market_status,
             "is_stale": quote.is_stale,
             "delay_minutes": quote.delay_minutes,
+            "freshness_label": quote.freshness_label,
         },
     )
 
