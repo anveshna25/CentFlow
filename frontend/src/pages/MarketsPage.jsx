@@ -1,5 +1,19 @@
 import { useState, useEffect, useCallback, useTransition, useRef } from 'react'
-import { Card, Badge, LoadingState, ErrorState, EmptyState } from '../components/common'
+import {
+  Card,
+  Badge,
+  Button,
+  LoadingState,
+  ErrorState,
+  EmptyState,
+  SearchInput,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableHeaderCell,
+} from '../components/common'
 import { AssetDetailModal } from '../components/market/AssetDetailModal'
 import { useNavigation } from '../state/NavigationContext'
 import {
@@ -402,27 +416,23 @@ export function MarketsPage({ externalSearch = '' }) {
         </div>
 
         {/* Filter Pills */}
-        <div style={{ display: 'flex', gap: '8px', background: 'var(--cf-bg-surface-elevated)', padding: '4px', borderRadius: 'var(--cf-radius-lg)', border: '1px solid var(--cf-border)' }}>
+        <div style={{ display: 'flex', gap: 'var(--cf-space-1)', background: 'var(--cf-bg-surface-elevated)', padding: '3px', borderRadius: 'var(--cf-radius-lg)', border: '1px solid var(--cf-border)' }}>
           {['all', 'equity', 'crypto', 'etf'].map((cat) => (
-            <button
+            <Button
               key={cat}
               id={`filter-tab-${cat}`}
+              variant={selectedCategory === cat ? 'primary' : 'ghost'}
+              size="sm"
               onClick={() => setSelectedCategory(cat)}
               style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--cf-radius-md)',
-                fontSize: '12px',
-                fontWeight: 600,
                 textTransform: 'capitalize',
-                background: selectedCategory === cat ? 'var(--cf-brand-primary)' : 'transparent',
-                color: selectedCategory === cat ? '#ffffff' : 'var(--cf-text-secondary)',
-                border: 'none',
-                cursor: 'pointer',
-                transition: 'all var(--cf-transition-fast)',
+                height: '28px',
+                padding: '0 var(--cf-space-3)',
+                fontSize: 'var(--cf-font-size-xs)',
               }}
             >
               {cat === 'all' ? 'All Assets' : cat}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -443,46 +453,16 @@ export function MarketsPage({ externalSearch = '' }) {
         title={`${filteredInstruments.length} Available Instruments`}
         subtitle="Click any instrument to open interactive price chart & market intelligence"
         action={
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <input
-                id="cf-markets-filter-input"
-                type="text"
-                placeholder="Search symbol or name..."
-                value={localSearch}
-                onChange={(e) => setLocalSearch(e.target.value)}
-                style={{
-                  background: 'var(--cf-bg-base)',
-                  border: '1px solid var(--cf-border)',
-                  borderRadius: 'var(--cf-radius-md)',
-                  padding: '6px 28px 6px 12px',
-                  color: 'var(--cf-text-primary)',
-                  fontSize: '12px',
-                  outline: 'none',
-                  width: '200px',
-                }}
-              />
-              {localSearch && (
-                <button
-                  type="button"
-                  id="cf-markets-clear-search-btn"
-                  onClick={() => setLocalSearch('')}
-                  aria-label="Clear table search filter"
-                  style={{
-                    position: 'absolute',
-                    right: '8px',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--cf-text-muted)',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    padding: 0,
-                  }}
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--cf-space-2)' }}>
+            <SearchInput
+              id="cf-markets-filter-input"
+              placeholder="Search symbol or name..."
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              onClear={() => setLocalSearch('')}
+              size="sm"
+              style={{ width: '220px' }}
+            />
             {activeSearch && (
               <Badge variant="brand" size="sm">
                 Filter: &ldquo;{activeSearch}&rdquo;
@@ -515,85 +495,74 @@ export function MarketsPage({ externalSearch = '' }) {
             }
           />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--cf-border)', color: 'var(--cf-text-muted)' }}>
-                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>SYMBOL</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>NAME</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>CATEGORY</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>EXCHANGE</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>PRICE (USD)</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>24H CHANGE</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>VOLUME</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>ACTION</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredInstruments.map((inst) => (
-                  <tr
-                    key={inst.symbol}
-                    id={`market-inst-${inst.symbol}`}
-                    onClick={() => handleOpenDetail(inst)}
-                    style={{
-                      borderBottom: '1px solid var(--cf-border)',
-                      transition: 'background var(--cf-transition-fast)',
-                      cursor: 'pointer',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--cf-bg-surface-hover)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--cf-brand-cyan)' }}>
-                      {highlightMatch(inst.symbol, activeSearch)}
-                    </td>
-                    <td style={{ padding: '14px 16px', color: 'var(--cf-text-secondary)' }}>
-                      {highlightMatch(inst.name, activeSearch)}
-                    </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <Badge variant={inst.assetType === 'crypto' ? 'brand' : inst.assetType === 'etf' ? 'warning' : 'neutral'} size="sm">
-                        {inst.assetType}
-                      </Badge>
-                    </td>
-                    <td style={{ padding: '14px 16px', color: 'var(--cf-text-muted)' }}>
-                      {inst.exchange}
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--cf-text-primary)' }}>
-                      ${inst.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                      <span style={{ color: inst.isUp ? 'var(--cf-bullish)' : 'var(--cf-bearish)', fontWeight: 600 }}>
-                        {inst.change}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', color: 'var(--cf-text-secondary)' }}>
-                      {inst.volume}
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                      <button
-                        id={`btn-chart-${inst.symbol}`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleOpenDetail(inst)
-                        }}
-                        style={{
-                          background: 'rgba(6, 182, 212, 0.12)',
-                          color: 'var(--cf-brand-cyan)',
-                          border: '1px solid rgba(6, 182, 212, 0.25)',
-                          borderRadius: 'var(--cf-radius-sm)',
-                          padding: '4px 10px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Chart
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table id="cf-markets-table">
+            <TableHead>
+              <TableRow hoverable={false}>
+                <TableHeaderCell>SYMBOL</TableHeaderCell>
+                <TableHeaderCell>NAME</TableHeaderCell>
+                <TableHeaderCell>CATEGORY</TableHeaderCell>
+                <TableHeaderCell>EXCHANGE</TableHeaderCell>
+                <TableHeaderCell align="right">PRICE (USD)</TableHeaderCell>
+                <TableHeaderCell align="right">24H CHANGE</TableHeaderCell>
+                <TableHeaderCell align="right">VOLUME</TableHeaderCell>
+                <TableHeaderCell align="center">ACTION</TableHeaderCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredInstruments.map((inst) => (
+                <TableRow
+                  key={inst.symbol}
+                  id={`market-inst-${inst.symbol}`}
+                  onClick={() => handleOpenDetail(inst)}
+                  hoverable
+                >
+                  <TableCell style={{ fontWeight: 700, color: 'var(--cf-brand-cyan)' }}>
+                    {highlightMatch(inst.symbol, activeSearch)}
+                  </TableCell>
+                  <TableCell style={{ color: 'var(--cf-text-secondary)' }}>
+                    {highlightMatch(inst.name, activeSearch)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={inst.assetType === 'crypto' ? 'brand' : inst.assetType === 'etf' ? 'warning' : 'neutral'} size="sm">
+                      {inst.assetType}
+                    </Badge>
+                  </TableCell>
+                  <TableCell style={{ color: 'var(--cf-text-muted)' }}>
+                    {inst.exchange}
+                  </TableCell>
+                  <TableCell align="right" tabular style={{ fontWeight: 600, color: 'var(--cf-text-primary)' }}>
+                    ${inst.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </TableCell>
+                  <TableCell align="right" tabular>
+                    <span style={{ color: inst.isUp ? 'var(--cf-bullish)' : 'var(--cf-bearish)', fontWeight: 600 }}>
+                      {inst.change}
+                    </span>
+                  </TableCell>
+                  <TableCell align="right" tabular style={{ color: 'var(--cf-text-secondary)' }}>
+                    {inst.volume}
+                  </TableCell>
+                  <TableCell align="center">
+                    <Button
+                      id={`btn-chart-${inst.symbol}`}
+                      variant="secondary"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleOpenDetail(inst)
+                      }}
+                      style={{
+                        height: '26px',
+                        padding: '0 var(--cf-space-2)',
+                        fontSize: '11px',
+                      }}
+                    >
+                      Chart
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </Card>
 
